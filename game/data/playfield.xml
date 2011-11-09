@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<playfield>
+<surface>
+<wall min = "-12 -20 -30" max = "12 0 0"></wall>
+<wall min = "-3 -5 -40" max = "3 0 -30"></wall>
+<wall min = "-3 -5 -50" max = "3 0 -40"></wall>
+<wall min = "-3 -5 -60" max = "3 0 -50"></wall>
+</surface>
+<obstacles>
+<obstacle min = "-10 0 -10" max = "0 10 0" end = "0 9 0" d = "0.003"></obstacle>
+</obstacles>
+<blackholes>
+<hole pos="10 30 40" radius = "4.0"></hole>
+</blackholes>
+<power>
+<particle pos = "10 20 30"></particle>
+</power>
+<show>
+<flame pos = "10 10 30"></flame>
+</show>
+</playfield>
