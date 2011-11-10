@@ -1,6 +1,8 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+
 
 #include <GL/glew.h>
 #include <GL/gl.h>
@@ -66,6 +68,13 @@ char filelocation[] = "data/plate.bmp";
 /* Storage For One Texture ( NEW ) */
 GLuint texture[1];
 
+/*angle of rotation*/
+float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0,xpos1=0.0,zpos1=0.0;
+float delta=2;
+float cRadius = 10.0f; // our radius distance from our character
+
+float lastx, lasty;
+
 
 void Quit( int returnCode )
 {
@@ -123,25 +132,48 @@ int resizeWindow( int width, int height )
 
     return( TRUE );
 }
-
+float mod(float a)
+{
+	if(a>=0.00)
+		return a;
+	else 
+	   return -a;
+}
 /* function to handle key press events */
 void handleKeyPress( SDL_keysym *keysym )
 {
+	 float xrotrad, yrotrad;
+   
 	switch( (keysym->sym) ){
 		case SDLK_ESCAPE:
 			Quit(0);
 			break;
-		case SDLK_LEFT:
-	          eye[0] -= 0.1;
+			case SDLK_LEFT: printf("IN left\n");
+					printf("%f\n",yrot);
+					    yrotrad = (yrot / 180 * 3.141592654f);
+    xpos1 -= mod(float(cos(yrotrad))) *delta*0.01;
+    zpos1 -= mod(float(sin(yrotrad))) *delta*0.01;
+    
+				 break;
+	        case SDLK_RIGHT:printf("IN right\n");
+yrotrad = (yrot / 180 * 3.141592654f);
+    xpos1 += mod(float(cos(yrotrad))) *delta*0.01;
+    zpos1 += mod(float(sin(yrotrad))) *delta*0.01;
+        
 	          break;
-	        case SDLK_RIGHT:
-	          eye[0] += 0.1;
-	          break;
-	        case SDLK_UP:
-	          eye[1] -= 0.1;
-	          break;
-	        case SDLK_DOWN:
-	          eye[1] += 0.1;
+	        case SDLK_UP:printf("IN up\n");
+	               yrotrad = (yrot / 180 * 3.141592654f);
+					    xrotrad = (xrot / 180 * 3.141592654f); 
+					    xpos1 += mod(float(sin(yrotrad)))*delta*0.01;
+					    zpos1 -=mod(float(cos(yrotrad)))*delta*0.01;
+					    ypos -= float(sin(xrotrad));
+					  break;
+	        case SDLK_DOWN:printf("IN down\n");
+	            yrotrad = (yrot / 180 * 3.141592654f);
+	            xrotrad = (xrot / 180 * 3.141592654f);
+	            xpos1 -= mod(float(sin(yrotrad)))*delta*0.01;
+	            zpos1 += mod(float(cos(yrotrad)))*delta*0.01;;
+	            ypos += float(sin(xrotrad));
 	          break;
 	        default:
 	          break;
@@ -149,6 +181,20 @@ void handleKeyPress( SDL_keysym *keysym )
 
     return;
 }
+
+/* handling mouse event */
+void mouseMovement(int x,int y,int z) {
+if(z==1)
+{
+    int diffx=x-lastx; //check the difference between the current x and the last x position
+    int diffy=y-lasty; //check the difference between the  current y and the last y position
+    lastx=x; //set lastx to the current x position
+    lasty=y; //set lasty to the current y position
+    xrot += (float) diffy; //set the xrot to xrot with the addition of the difference in the y position
+    yrot += (float) diffx;    //set the xrot to yrot with the addition of the difference in the x position
+}
+   }
+
 
 /* setting up shaders for the program */
 
@@ -191,6 +237,10 @@ void genDisplayList(){
 int initGL(void)
 {
 
+	int argc = 1;
+	char *argv = "freaking stud";
+	glutInit(&argc, &argv);
+
     if ( !LoadGLTextures( ) )
 		return FALSE;
 	
@@ -225,7 +275,6 @@ int initGL(void)
 
     return( TRUE );
 }
-
 
 
 void drawRect(float* min, float* max){
@@ -274,13 +323,11 @@ void drawRect(float* min, float* max){
 int drawGLScene( void )
 {
 
-
+	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
 
-	//glLightfv(GL_LIGHT0, GL_POSITION, lpos);	
-	
     glActiveTexture(GL_TEXTURE0);
     int texture_location = glGetUniformLocation(p, "texture");
     glUniform1i(texture_location, 0);
@@ -294,22 +341,23 @@ int drawGLScene( void )
     for(int j=0; j<len; j++){
     location vertexData[12];
     (wallData.at(j)).generateRect(vertexData);
-
   	for(int i = 0; i < 6; i++){
   		drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
   	}
     }
 
+    xpos=xpos+xpos1;
+    zpos=zpos+zpos1;
+    xpos1*=0.98;
+    zpos1*=0.98;
 
-	/*glColor3f(1.0, 0.0, 0.0);
-	
-	glBegin(GL_QUADS);
-		glVertex3f(0.0, -1.0, -1.0);
-		glVertex3f(0.0, 1.0, -1.0);
-		glVertex3f(0.0, 1.0, 1.0);
-		glVertex3f(0.0, -1.0, 1.0);
-	glEnd();*/
-	
+    glTranslatef(xpos, 0.5f, zpos);
+    glRotatef(xrot,1.0,0.0,0.0);
+    glRotatef(yrot,0.0,0.0,1.0);
+    /* Drawing the moving cube */
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glutSolidCube(1.0f);
+
     /* Draw it to the screen */
     SDL_GL_SwapBuffers( );
 
@@ -363,6 +411,14 @@ int main( int argc, char **argv )
 	    Quit( 1 );
 	}
 
+    if ( ( SDL_EnableKeyRepeat( 100, SDL_DEFAULT_REPEAT_INTERVAL ) ) )
+    {
+   	    fprintf( stderr, "Setting keyboard repeat failed: %s\n",
+   		     SDL_GetError( ) );
+   	    Quit( 1 );
+    }
+
+
     /* initialize OpenGL */
     initGL( );
 
@@ -377,7 +433,7 @@ int main( int argc, char **argv )
 			{
 			case SDL_ACTIVEEVENT:
 			    if ( event.active.gain == 0 )
-				isActive = FALSE;
+				isActive = TRUE;
 			    else
 				isActive = TRUE;
 			    break;			    
@@ -398,6 +454,9 @@ int main( int argc, char **argv )
 			case SDL_QUIT:
 			    done = TRUE;
 			    break;
+			case SDL_MOUSEMOTION:
+				mouseMovement( event.motion.xrel,event.motion.yrel,event.motion.state);
+				break;
 			default:
 			    break;
 			}
