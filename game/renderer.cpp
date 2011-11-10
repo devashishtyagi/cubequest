@@ -134,6 +134,13 @@ float cRadius = 10.0f; // our radius distance from our character
 
 float lastx, lasty;
 
+/*angle of rotation*/
+float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0,xpos1=0.0,zpos1=0.0;
+float delta=2;
+float cRadius = 10.0f; // our radius distance from our character
+
+float lastx, lasty;
+
 
 void Quit( int returnCode )
 {
@@ -277,6 +284,7 @@ void handleKeyPress( SDL_keysym *keysym )
 		case SDLK_ESCAPE:
 			Quit(0);
 			break;
+<<<<<<< HEAD
 		case SDLK_F1:
 		    /* F1 key was pressed
 		     * this toggles fullscreen mode
@@ -417,6 +425,35 @@ void handleKeyPress( SDL_keysym *keysym )
 	    col = ( ++col ) % 12;
 	    break;
 
+=======
+			case SDLK_LEFT:
+					float yrotrad;
+					yrotrad = (yrot / 180 * 3.141592654f);
+					xpos1 += float(cos(yrotrad)) *delta*0.01;
+					//zpos1 -= float(sin(yrotrad)) *delta*0.01;
+					eye[0]+=0.1;
+				 break;
+	        case SDLK_RIGHT:
+	            yrotrad = (yrot / 180 * 3.141592654f);
+	            xpos1 -= float(cos(yrotrad)) *delta*0.01;
+	            //zpos1 += float(sin(yrotrad)) *delta*0.01;
+	          break;
+	        case SDLK_UP:
+	            float xrotrad;
+	            yrotrad = (yrot / 180 * 3.141592654f);
+	            xrotrad = (xrot / 180 * 3.141592654f);
+	            //xpos1 += float(sin(yrotrad))*delta*0.01;
+	            zpos1 += float(cos(yrotrad))*delta*0.01;
+	            ypos -= float(sin(xrotrad));
+	          break;
+	        case SDLK_DOWN:
+	            yrotrad = (yrot / 180 * 3.141592654f);
+	            xrotrad = (xrot / 180 * 3.141592654f);
+	            //xpos1 -= float(sin(yrotrad))*delta*0.01;
+	            zpos1 -= float(cos(yrotrad))*delta*0.01;;
+	            ypos += float(sin(xrotrad));
+	          break;
+>>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
 	        default:
 	          		break;
 	  }
@@ -425,17 +462,30 @@ void handleKeyPress( SDL_keysym *keysym )
 }
 
 /* handling mouse event */
+<<<<<<< HEAD
 void mouseMovement(int x,int y,int z) {
 if(z==1)
 {
+=======
+void mouseMovement(int x,int y) {
+>>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
     int diffx=x-lastx; //check the difference between the current x and the last x position
     int diffy=y-lasty; //check the difference between the  current y and the last y position
     lastx=x; //set lastx to the current x position
     lasty=y; //set lasty to the current y position
     xrot += (float) diffy; //set the xrot to xrot with the addition of the difference in the y position
     yrot += (float) diffx;    //set the xrot to yrot with the addition of the difference in the x position
+<<<<<<< HEAD
 }
    }
+=======
+   printf("%f\n",xrot);
+   printf("%f\n",yrot);
+
+  // eye[0] = eye[0] + xrot*0.00001;
+  // eye[1] = eye[1] + yrot*0.000001;
+}
+>>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
 
 
 /* setting up shaders for the program */
@@ -615,6 +665,7 @@ int drawGLScene( void )
     xpos1*=0.98;
     zpos1*=0.98;
 
+<<<<<<< HEAD
     glTranslatef(xpos, 0.5f, zpos);
     glRotatef(xrot,1.0,0.0,0.0);
     glRotatef(yrot,0.0,0.0,1.0);
@@ -704,6 +755,14 @@ int drawGLScene( void )
 
 glDisable(GL_BLEND);
 
+=======
+    glTranslatef(xpos, 0.5f, zpos-cRadius);
+    glRotatef(xrot,1.0,0.0,0.0);
+
+    /* Drawing the moving cube */
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glutSolidCube(1.0f);
+>>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
 
     /* Draw it to the screen */
     SDL_GL_SwapBuffers( );
@@ -815,7 +874,11 @@ int main( int argc, char **argv )
 			    done = TRUE;
 			    break;
 			case SDL_MOUSEMOTION:
+<<<<<<< HEAD
 				mouseMovement( event.motion.xrel,event.motion.yrel,event.motion.state);
+=======
+				mouseMovement((int) &event.motion.x, (int) &event.motion.y);
+>>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
 				break;
 			default:
 			    break;
