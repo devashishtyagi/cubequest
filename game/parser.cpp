@@ -165,7 +165,7 @@ void getHoleData(vector<string> data, vector<holes>& holesData){
 
 void getPowerData(vector<string> data, vector<location>& powerData){
 	int len = (int) data.size();
-	for(int i=0; i<len; i=i+2){
+	for(int i=0; i<len; i=i++){
 		location pos;
 		vector<string> tokens;
 		split(tokens, data.at(i), is_any_of("\t "));
@@ -179,7 +179,7 @@ void getPowerData(vector<string> data, vector<location>& powerData){
 
 void getFlameData(vector<string> data, vector<location>& flameData){
 	int len = (int) data.size();
-	for(int i=0; i<len; i=i+2){
+	for(int i=0; i<len; i=i++){
 		location pos;
 		vector<string> tokens;
 		split(tokens, data.at(i), is_any_of("\t "));

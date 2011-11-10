@@ -22,7 +22,7 @@
 #define FALSE 0
 
 /* Max number of particles */
-#define MAX_PARTICLES 1000
+#define MAX_PARTICLES 500
 
 
 using namespace std;
@@ -59,10 +59,10 @@ float field[][3] = {{12.0, 0.0, 3.0},{-12.0, 0.0, -15.0},
 int field_obj = 9;
 
 int rainbow=TRUE;
-float slowdown = 2.0f; /* Slow Down Particles                                */
+float slowdown = 4.0f; /* Slow Down Particles                                */
 float xspeed;          /* Base X Speed (To Allow Keyboard Direction Of Tail) */
 float yspeed;          /* Base Y Speed (To Allow Keyboard Direction Of Tail) */
-float zoom = -5.0f;   /* Used To Zoom Out                                   */
+float zoom = -10.0f;   /* Used To Zoom Out                                   */
 
 GLuint loop;           /* Misc Loop Variable                                 */
 GLuint col = 0;        /* Current Color Selection                            */
@@ -134,12 +134,6 @@ float cRadius = 10.0f; // our radius distance from our character
 
 float lastx, lasty;
 
-/*angle of rotation*/
-float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0,xpos1=0.0,zpos1=0.0;
-float delta=1;
-float cRadius = 10.0f; // our radius distance from our character
-
-float lastx, lasty;
 
 
 void Quit( int returnCode )
@@ -226,8 +220,7 @@ int resizeWindow( int width, int height )
 
     return( TRUE );
 }
-<<<<<<< HEAD
-=======
+
 
 /* function to reset one particle to initial state */
 /* NOTE: I added this function to replace doing the same thing in several
@@ -270,32 +263,23 @@ void ResetParticle( int num, int color, float xDir, float yDir, float zDir )
     return;
 }
 
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
+
 float mod(float a)
 {
 	if(a>=0.00)
 		return a;
-<<<<<<< HEAD
 	else
-=======
-	else 
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
 	   return -a;
 }
 /* function to handle key press events */
 void handleKeyPress( SDL_keysym *keysym )
 {
 	 float xrotrad, yrotrad;
-<<<<<<< HEAD
 
-=======
-   
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
 	switch( (keysym->sym) ){
 		case SDLK_ESCAPE:
 			Quit(0);
 			break;
-<<<<<<< HEAD
 		case SDLK_F1:
 		    /* F1 key was pressed
 		     * this toggles fullscreen mode
@@ -315,6 +299,7 @@ void handleKeyPress( SDL_keysym *keysym )
 		     */
 		    if ( slowdown < 4.0f )
 			slowdown += 0.01f;
+		    break;
 		case SDLK_PAGEUP:
 		    /* PageUp key was pressed
 		     * this zooms into the scene
@@ -331,11 +316,11 @@ void handleKeyPress( SDL_keysym *keysym )
 		case SDLK_LEFT: 
 			   	yrotrad = (yrot / 180 * 3.141592654f);
 			   	xpos1 -= mod(float(cos(yrotrad))) *delta*0.01;
-			    	zpos1 -= mod(float(sin(yrotrad))) *delta*0.01;
+			    zpos1 -= mod(float(sin(yrotrad))) *delta*0.01;
 				    /* Left arrow key was pressed
 				     * this decreases the particles' x movement
 				     */
-				    if ( xspeed > -200.0f )
+				if ( xspeed > -200.0f )
 					xspeed--;
 
 			    	break;
@@ -435,85 +420,31 @@ void handleKeyPress( SDL_keysym *keysym )
 	    delay = 0;
 	    col = ( ++col ) % 12;
 	    break;
-
-=======
-			case SDLK_LEFT:
-				printf("IN left\n");
-				printf("%f\n",yrot);
-				yrotrad = (yrot / 180 * 3.141592654f);
-				xpos1 -= mod(float(cos(yrotrad))) *delta*0.01;
-				zpos1 -= mod(float(sin(yrotrad))) *delta*0.01;
-				break;
-
-	        case SDLK_RIGHT:
-	        	printf("IN right\n");
-	        	yrotrad = (yrot / 180 * 3.141592654f);
-	        	xpos1 += mod(float(cos(yrotrad))) *delta*0.01;
-	        	zpos1 += mod(float(sin(yrotrad))) *delta*0.01;
-	        	break;
-	        case SDLK_UP:
-	        	printf("IN up\n");
-	        	yrotrad = (yrot / 180 * 3.141592654f);
-			    xrotrad = (xrot / 180 * 3.141592654f);
-			    xpos1 += mod(float(sin(yrotrad)))*delta*0.01;
-			    zpos1 -=mod(float(cos(yrotrad)))*delta*0.01;
-			    ypos -= float(sin(xrotrad));
-			    break;
-	        case SDLK_DOWN:
-	        	printf("IN down\n");
-	            yrotrad = (yrot / 180 * 3.141592654f);
-	            xrotrad = (xrot / 180 * 3.141592654f);
-	            xpos1 -= mod(float(sin(yrotrad)))*delta*0.01;
-	            zpos1 += mod(float(cos(yrotrad)))*delta*0.01;;
-	            ypos += float(sin(xrotrad));
-	          break;
->>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
-	        default:
-	          		break;
+	    default:
+	       break;
 	  }
 
     return;
 }
 
 /* handling mouse event */
-<<<<<<< HEAD
+
 void mouseMovement(int x,int y,int z) {
 if(z==1)
 {
-    int diffx=x-lastx; 			//check the difference between the current x and the last x position
-    int diffy=y-lasty; 			//check the difference between the  current y and the last y position
-    lastx=x; 					//set lastx to the current x position
-    lasty=y; 					//set lasty to the current y position
-    xrot += (float) diffy; 	   //set the xrot to xrot with the addition of the difference in the y position
-    yrot += (float) diffx;    //set the xrot to yrot with the addition of the difference in the x position
-}
-   }
-=======
-<<<<<<< HEAD
-void mouseMovement(int x,int y,int z) {
-if(z==1)
-{
-=======
-void mouseMovement(int x,int y) {
->>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
     int diffx=x-lastx; //check the difference between the current x and the last x position
     int diffy=y-lasty; //check the difference between the  current y and the last y position
     lastx=x; //set lastx to the current x position
     lasty=y; //set lasty to the current y position
     xrot += (float) diffy; //set the xrot to xrot with the addition of the difference in the y position
     yrot += (float) diffx;    //set the xrot to yrot with the addition of the difference in the x position
-<<<<<<< HEAD
 }
-   }
-=======
    printf("%f\n",xrot);
    printf("%f\n",yrot);
 
   // eye[0] = eye[0] + xrot*0.00001;
   // eye[1] = eye[1] + yrot*0.000001;
 }
->>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
 
 
 /* setting up shaders for the program */
@@ -575,12 +506,9 @@ int initGL(void)
 		
 	setShaders();
 	
-<<<<<<< HEAD
 	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
     glEnable( GL_TEXTURE_2D );
-=======
-    //glEnable( GL_TEXTURE_2D );
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
+    //glEnable( GL_TEXTURE_2D )
     glShadeModel( GL_SMOOTH );
     glClearColor( 0.0f, 0.0f, 0.0f, 0.5f );
     glClearDepth( 1.0f );
@@ -620,6 +548,83 @@ int initGL(void)
     return( TRUE );
 }
 
+void drawParticles(float* pos){
+	/* Select Our Texture */
+		glLoadIdentity();
+		gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+	    glBindTexture( GL_TEXTURE_2D, texture[1] );
+	    glTranslatef(pos[0],pos[1],pos[2]);
+	    /* Modify each of the particles */
+	    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
+		{
+		    if ( particles[loop].active )
+			{
+			    /* Grab Our Particle X Position */
+			    float x = particles[loop].x;
+			    /* Grab Our Particle Y Position */
+			    float y = particles[loop].y;
+			    /* Particle Z Position + Zoom */
+			    float z = particles[loop].z + zoom;
+
+			    /* Draw The Particle Using Our RGB Values,
+			     * Fade The Particle Based On It's Life
+			     */
+			    glColor4f( particles[loop].r,
+				       particles[loop].g,
+				       particles[loop].b,
+				       particles[loop].life );
+
+			    /* Build Quad From A Triangle Strip */
+			    glBegin( GL_TRIANGLE_STRIP );
+			      /* Top Right */
+			      glTexCoord2d( 1, 1 );
+			      glVertex3f( x + 0.03f, y + 0.03f, z );
+			      /* Top Left */
+			      glTexCoord2d( 0, 1 );
+			      glVertex3f( x - 0.03f, y + 0.03f, z );
+			      /* Bottom Right */
+			      glTexCoord2d( 1, 0 );
+			      glVertex3f( x + 0.03f, y - 0.03f, z );
+			      /* Bottom Left */
+			      glTexCoord2d( 0, 0 );
+			      glVertex3f( x - 0.03f, y - 0.03f, z );
+			    glEnd( );
+
+			    /* Move On The X Axis By X Speed */
+			    particles[loop].x += particles[loop].xi /
+				( slowdown * 1000 );
+			    /* Move On The Y Axis By Y Speed */
+			    particles[loop].y += particles[loop].yi /
+				( slowdown * 1000 );
+			    /* Move On The Z Axis By Z Speed */
+			    particles[loop].z += particles[loop].zi /
+				( slowdown * 1000 );
+
+			    /* Take Pull On X Axis Into Account */
+			    particles[loop].xi += particles[loop].xg;
+			    /* Take Pull On Y Axis Into Account */
+			    particles[loop].yi += particles[loop].yg;
+			    /* Take Pull On Z Axis Into Account */
+			    particles[loop].zi += particles[loop].zg;
+
+			    /* Reduce Particles Life By 'Fade' */
+			    particles[loop].life -= particles[loop].fade;
+
+			    /* If the particle dies, revive it */
+			    if ( particles[loop].life < 0.0f )
+				{
+				    float xi, yi, zi;
+				    xi = xspeed +
+					( float )( ( rand( ) % 60 ) - 32.0f );
+				    yi = yspeed +
+					( float)( ( rand( ) % 60 ) - 30.0f );
+				    zi = ( float )( ( rand( ) % 60 ) - 30.0f );
+				    ResetParticle( loop, col, xi, yi, zi );
+	                        }
+			}
+		}
+
+}
 
 void drawRect(float* min, float* max){
 	if (min[0] == max[0]){
@@ -680,6 +685,8 @@ int drawGLScene( void )
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
 
+    int len;
+
     glActiveTexture(GL_TEXTURE0);
     int texture_location = glGetUniformLocation(p, "texture");
     glUniform1i(texture_location, 0);
@@ -689,7 +696,8 @@ int drawGLScene( void )
     	drawRect(field[2*i+1], field[2*i]);
     }*/
 
-    int len = (int) wallData.size();
+    glColor3f(1.0, 1.0, 1.0);
+    len = (int) wallData.size();
     for(int j=0; j<len; j++){
     location vertexData[12];
     (wallData.at(j)).generateRect(vertexData);
@@ -703,110 +711,31 @@ int drawGLScene( void )
     xpos1*=0.98;
     zpos1*=0.98;
 
-<<<<<<< HEAD
+   /*
     glTranslatef(xpos, 0.5f, zpos);
-=======
-<<<<<<< HEAD
     glTranslatef(xpos, 0.5f, zpos);
     glRotatef(xrot,1.0,0.0,0.0);
-    glRotatef(yrot,0.0,0.0,1.0);
+    glRotatef(yrot,0.0,0.0,1.0); */
+
     /* Drawing the moving cube */
+
+    /*
     glColor3f(1.0f, 0.0f, 0.0f);
     glutSolidCube(1.0f);
-
- glEnable( GL_BLEND );
-    /* Type Of Blending To Perform */
-    glBlendFunc( GL_SRC_ALPHA, GL_ONE );
-    /* Really Nice Point Smoothing */
-   
-    /* Select Our Texture */
-    glBindTexture( GL_TEXTURE_2D, texture[1] );
-
-    glLoadIdentity( );
-    //glTranslatef(10.0f,0.0f,0.0f);
-    /* Modify each of the particles */
-    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
-	{
-	    if ( particles[loop].active )
-		{
-		    /* Grab Our Particle X Position */
-		    float x = particles[loop].x;
-		    /* Grab Our Particle Y Position */
-		    float y = particles[loop].y;
-		    /* Particle Z Position + Zoom */
-		    float z = particles[loop].z + zoom;
-
-		    /* Draw The Particle Using Our RGB Values,
-		     * Fade The Particle Based On It's Life
-		     */
-		    glColor4f( particles[loop].r,
-			       particles[loop].g,
-			       particles[loop].b,
-			       particles[loop].life );
-
-		    /* Build Quad From A Triangle Strip */
-		    glBegin( GL_TRIANGLE_STRIP );
-		      /* Top Right */
-		      glTexCoord2d( 1, 1 );
-		      glVertex3f( x + 0.1f, y + 0.1f, z );
-		      /* Top Left */
-		      glTexCoord2d( 0, 1 );
-		      glVertex3f( x - 0.1f, y + 0.1f, z );
-		      /* Bottom Right */
-		      glTexCoord2d( 1, 0 );
-		      glVertex3f( x + 0.1f, y - 0.1f, z );
-		      /* Bottom Left */
-		      glTexCoord2d( 0, 0 );
-		      glVertex3f( x - 0.1f, y - 0.1f, z );
-		    glEnd( );
-
-		    /* Move On The X Axis By X Speed */
-		    particles[loop].x += particles[loop].xi /
-			( slowdown * 1000 );
-		    /* Move On The Y Axis By Y Speed */
-		    particles[loop].y += particles[loop].yi /
-			( slowdown * 1000 );
-		    /* Move On The Z Axis By Z Speed */
-		    particles[loop].z += particles[loop].zi /
-			( slowdown * 1000 );
-
-		    /* Take Pull On X Axis Into Account */
-		    particles[loop].xi += particles[loop].xg;
-		    /* Take Pull On Y Axis Into Account */
-		    particles[loop].yi += particles[loop].yg;
-		    /* Take Pull On Z Axis Into Account */
-		    particles[loop].zi += particles[loop].zg;
-
-		    /* Reduce Particles Life By 'Fade' */
-		    particles[loop].life -= particles[loop].fade;
-
-		    /* If the particle dies, revive it */
-		    if ( particles[loop].life < 0.0f )
-			{
-			    float xi, yi, zi;
-			    xi = xspeed +
-				( float )( ( rand( ) % 60 ) - 32.0f );
-			    yi = yspeed +
-				( float)( ( rand( ) % 60 ) - 30.0f );
-			    zi = ( float )( ( rand( ) % 60 ) - 30.0f );
-			    ResetParticle( loop, col, xi, yi, zi );
-                        }
-		}
-	}
-
-glDisable(GL_BLEND);
-
-=======
-    glTranslatef(xpos, 0.5f, zpos-cRadius);
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
-    glRotatef(xrot,1.0,0.0,0.0);
-    glRotatef(yrot,0.0,0.0,1.0);
-    /* Drawing the moving cube */
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glutSolidCube(1.0f);
->>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
+    */
 
     /* Draw it to the screen */
+    glLoadIdentity();
+    glEnable( GL_BLEND );
+        /* Type Of Blending To Perform */
+        glBlendFunc( GL_SRC_ALPHA, GL_ONE );
+        /* Really Nice Point Smoothing */
+        len = (int) flameData.size();
+        for(int i=0; i<len; i++)
+        	drawParticles((flameData.at(i)).v);
+     glDisable(GL_BLEND);
+
+
     SDL_GL_SwapBuffers( );
 
     /* Gather our frames per second */
@@ -821,7 +750,6 @@ glDisable(GL_BLEND);
 	    Frames = 0;
 	}
     }
-
 
     return( TRUE );
 }
@@ -915,16 +843,7 @@ int main( int argc, char **argv )
 			case SDL_QUIT:
 			    done = TRUE;
 			    break;
-			case SDL_MOUSEMOTION:
-<<<<<<< HEAD
-				mouseMovement( event.motion.xrel,event.motion.yrel,event.motion.state);
-=======
-<<<<<<< HEAD
-				mouseMovement( event.motion.xrel,event.motion.yrel,event.motion.state);
-=======
-				mouseMovement((int) &event.motion.x, (int) &event.motion.y);
->>>>>>> 1e64a4339366179694bd51e42dd1b4e6b45dd4a6
->>>>>>> 942c50b4fab686bf047738cf2c9279152be54129
+				mouseMovement((int) event.motion.x, (int) event.motion.y, (int) event.motion.state);
 				break;
 			default:
 			    break;

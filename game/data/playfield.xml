@@ -13,11 +13,14 @@
 </obstacles>
 <blackholes>
 <hole pos="10 30 40" radius = "4.0"></hole>
+<hole pos="10 30 40" radius = "4.0"></hole>
 </blackholes>
 <power>
 <particle pos = "10 20 30"></particle>
+<particle pos = "10 20 30"></particle>
 </power>
 <show>
-<flame pos = "10 10 30"></flame>
+<flame pos = "0 2 -5"></flame>
+<flame pos = "1 2 -5"></flame>
 </show>
 </playfield>
