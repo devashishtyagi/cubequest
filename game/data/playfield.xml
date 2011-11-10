@@ -5,22 +5,30 @@
 <wall min = "-3 -5 -40" max = "3 0 -30"></wall>
 <wall min = "-3 -8 -50" max = "3 -5 -40"></wall>
 <wall min = "-3 -11 -60" max = "3 -8 -50"></wall>
-<wall min = "-15 -14 -100" max = "15 -11 -60"></wall>
+<wall min = "-15 -31 -100" max = "15 -11 -60"></wall>
 <wall min = "-15 -11 -90" max = "0 10 -70"></wall>
+<wall min = "-2 -14 -120" max = "2 -11 -100"></wall>
+<wall min = "-15 -31 -184" max = "15 -11 -144"></wall>
+<wall min = "-15 -11 -168" max = "-3 11 -148"></wall>
+<wall min = "3 -11 -168" max = "15 11 -148"></wall>
 </surface>
 <obstacles>
 <obstacle min = "-10 0 -10" max = "0 10 0" end = "0 9 0" d = "0.003"></obstacle>
 </obstacles>
 <blackholes>
-<hole pos="10 30 40" radius = "4.0"></hole>
-<hole pos="10 30 40" radius = "4.0"></hole>
+<hole pos="0 -11 -130" radius = "9.0"></hole>
 </blackholes>
 <power>
-<particle pos = "10 20 30"></particle>
-<particle pos = "10 20 30"></particle>
+<particle pos = "0 -11 -160"></particle>
 </power>
 <show>
-<flame pos = "0 2 -5"></flame>
-<flame pos = "1 2 -5"></flame>
+<flame pos = "-3 2 -30"></flame>
+<flame pos = "3 2 -30"></flame>
+<flame pos = "-3 -13 -152"></flame>
+<flame pos = "3 -13 -152"></flame>
+<flame pos = "-3 -13 -156"></flame>
+<flame pos = "3 -13 -156"></flame>
+<flame pos = "-3 -13 -160"></flame>
+<flame pos = "3 -13 -160"></flame>
 </show>
 </playfield>

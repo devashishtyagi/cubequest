@@ -22,7 +22,7 @@
 #define FALSE 0
 
 /* Max number of particles */
-#define MAX_PARTICLES 500
+#define MAX_PARTICLES 150
 
 
 using namespace std;
@@ -30,11 +30,15 @@ using namespace std;
 /* playfield sml */
 char filename[] = "data/playfield.xml";
 
+
 /* playfield data */
 vector<wall> wallData;
 vector<obstacle> obsData;
 vector<holes> holesData;
 vector<location> flameData, powerData;
+
+/* cube drawing data */
+wall cubeData(location(-1.0, 0.0, -2.0), location(1.0, 2.0, 0.0));
 
 /* Storage for display list of the playfield */
 GLuint playfieldList;
@@ -58,16 +62,15 @@ float field[][3] = {{12.0, 0.0, 3.0},{-12.0, 0.0, -15.0},
 
 int field_obj = 9;
 
-int rainbow=TRUE;
-float slowdown = 4.0f; /* Slow Down Particles                                */
+int rainbow=FALSE;
+float slowdown = 1000.0f; /* Slow Down Particles                                */
 float xspeed;          /* Base X Speed (To Allow Keyboard Direction Of Tail) */
-float yspeed;          /* Base Y Speed (To Allow Keyboard Direction Of Tail) */
+float yspeed=200;          /* Base Y Speed (To Allow Keyboard Direction Of Tail) */
 float zoom = -10.0f;   /* Used To Zoom Out                                   */
 
 GLuint loop;           /* Misc Loop Variable                                 */
 GLuint col = 0;        /* Current Color Selection                            */
 GLuint delay;          /* Rainbow Effect Delay                               */
-//GLuint texture[1];     /* Storage For Our Particle Texture                   */
 
 /* Create our particle structure */
 typedef struct
@@ -123,9 +126,10 @@ float lpos[4] = {1,0.5,1,0};
 /* This is our SDL surface */
 SDL_Surface *surface;
 char filelocation[] = "data/plate.bmp";
+char cubefilename[] = "data/cube.bmp";
 
 /* Storage For One Texture ( NEW ) */
-GLuint texture[2];
+GLuint texture[3];
 
 /*angle of rotation*/
 float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0,xpos1=0.0,zpos1=0.0;
@@ -146,7 +150,7 @@ void Quit( int returnCode )
 int LoadGLTextures( )
 {
     int Status = FALSE;
-    SDL_Surface *TextureImage[2]; 
+    SDL_Surface *TextureImage[3];
     
     if ( ( TextureImage[0] = SDL_LoadBMP( filelocation) ) )
         {
@@ -164,7 +168,7 @@ int LoadGLTextures( )
         }
         
     if ( TextureImage[0] )
-	    SDL_FreeSurface( TextureImage[0] );
+	    SDL_FreeSurface( TextureImage[0] );//GLuint texture[1];     /* Storage For Our Particle Texture                   */
 
 /* Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit */
     if ( ( TextureImage[1] = SDL_LoadBMP( "data/particle.bmp" ) ) )
@@ -193,6 +197,25 @@ int LoadGLTextures( )
     if ( TextureImage[1] )
 	    SDL_FreeSurface( TextureImage[1] );
 
+    /* Texture for the cube map */
+
+    if ( ( TextureImage[2] = SDL_LoadBMP( cubefilename) ) )
+        {
+	    Status = TRUE;
+	    glGenTextures( 1, &texture[2] );
+	    glBindTexture( GL_TEXTURE_2D, texture[2] );
+
+	    gluBuild2DMipmaps( GL_TEXTURE_2D, 3, TextureImage[2]->w,
+			  TextureImage[2]->h, GL_BGR,
+			  GL_UNSIGNED_BYTE, TextureImage[2]->pixels );
+
+	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        }
+
+    if ( TextureImage[2] )
+	    SDL_FreeSurface( TextureImage[2] );     /* Storage For Our Particle Texture                   */
 
     return Status;
 }
@@ -234,7 +257,7 @@ void ResetParticle( int num, int color, float xDir, float yDir, float zDir )
     /* Give the particles life */
     particles[num].life = 1.0f;
     /* Random Fade Speed */
-    particles[num].fade = ( float )( rand( ) %100 ) / 1000.0f + 0.003f;
+    particles[num].fade = ( float )( rand( ) %100 ) / 1000.0f + 0.00003f;
     /* Select Red Rainbow Color */
     particles[num].r = colors[color][0];
     /* Select Green Rainbow Color */
@@ -256,7 +279,7 @@ void ResetParticle( int num, int color, float xDir, float yDir, float zDir )
     /* Set Horizontal Pull To Zero */
     particles[num].xg = 0.0f;
     /* Set Vertical Pull Downward */
-    particles[num].yg = -0.8f;
+    particles[num].yg = -0.03f;
     /* Set Pull On Z Axis To Zero */
     particles[num].zg = 0.0f;
 
@@ -320,9 +343,9 @@ void handleKeyPress( SDL_keysym *keysym )
 				    /* Left arrow key was pressed
 				     * this decreases the particles' x movement
 				     */
-				if ( xspeed > -200.0f )
+				/*if ( xspeed > -200.0f )
 					xspeed--;
-
+*/
 			    	break;
 	        case SDLK_RIGHT:
 				yrotrad = (yrot / 180 * 3.141592654f);
@@ -331,9 +354,9 @@ void handleKeyPress( SDL_keysym *keysym )
 				    /* Right arrow key was pressed
 				     * this increases the particles' x movement
 				     */
-				    if ( xspeed < 200.0f )
+	/*			    if ( xspeed < 200.0f )
 					xspeed++;
-		
+		*/
 	          		break;
 	        case SDLK_UP:
 	               		yrotrad = (yrot / 180 * 3.141592654f);
@@ -342,9 +365,9 @@ void handleKeyPress( SDL_keysym *keysym )
 				zpos1 -=mod(float(cos(yrotrad)))*delta*0.01;
 				ypos -= float(sin(xrotrad));
 			/*for the particle effect*/
-			 	if ( yspeed < 200.0f )
+			 /*	if ( yspeed < 200.0f )
 					yspeed++;
-	   			break;
+	   			*/break;
 
 	        case SDLK_DOWN:
 	            		yrotrad = (yrot / 180 * 3.141592654f);
@@ -355,9 +378,9 @@ void handleKeyPress( SDL_keysym *keysym )
 				/* Down arrow key was pressed
 					     * this decreases the particles' y movement
 					     */
-				if ( yspeed > -200.0f )
+				/*if ( yspeed > -200.0f )
 					yspeed--;
-
+*/
 	          		break;
 	case SDLK_KP8:
 	    /* NumPad 8 key was pressed
@@ -548,8 +571,19 @@ int initGL(void)
     return( TRUE );
 }
 
+void drawHoles(float* pos, float radius){
+    glLoadIdentity( );
+    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+
+    glTranslatef(pos[0], pos[1], pos[2]);
+
+    glColor3f(0.0, 1.0, 0.0);
+    glutWireSphere(radius, 8, 8);
+}
+
 void drawParticles(float* pos){
 	/* Select Our Texture */
+
 		glLoadIdentity();
 		gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
 	    glBindTexture( GL_TEXTURE_2D, texture[1] );
@@ -578,27 +612,27 @@ void drawParticles(float* pos){
 			    glBegin( GL_TRIANGLE_STRIP );
 			      /* Top Right */
 			      glTexCoord2d( 1, 1 );
-			      glVertex3f( x + 0.03f, y + 0.03f, z );
+			      glVertex3f( x + 0.3f, y + 0.3f, z );
 			      /* Top Left */
 			      glTexCoord2d( 0, 1 );
-			      glVertex3f( x - 0.03f, y + 0.03f, z );
+			      glVertex3f( x - 0.3f, y + 0.3f, z );
 			      /* Bottom Right */
 			      glTexCoord2d( 1, 0 );
-			      glVertex3f( x + 0.03f, y - 0.03f, z );
+			      glVertex3f( x + 0.3f, y - 0.3f, z );
 			      /* Bottom Left */
 			      glTexCoord2d( 0, 0 );
-			      glVertex3f( x - 0.03f, y - 0.03f, z );
+			      glVertex3f( x - 0.3f, y - 0.3f, z );
 			    glEnd( );
 
 			    /* Move On The X Axis By X Speed */
 			    particles[loop].x += particles[loop].xi /
-				( slowdown * 1000 );
+				( slowdown * 100 );
 			    /* Move On The Y Axis By Y Speed */
 			    particles[loop].y += particles[loop].yi /
-				( slowdown * 1000 );
+				( slowdown * 100  );
 			    /* Move On The Z Axis By Z Speed */
 			    particles[loop].z += particles[loop].zi /
-				( slowdown * 1000 );
+				( slowdown * 750 );
 
 			    /* Take Pull On X Axis Into Account */
 			    particles[loop].xi += particles[loop].xg;
@@ -706,23 +740,27 @@ int drawGLScene( void )
   	}
     }
 
+    glLoadIdentity( );
+    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
     xpos=xpos+xpos1;
     zpos=zpos+zpos1;
     xpos1*=0.98;
     zpos1*=0.98;
 
-   /*
+
     glTranslatef(xpos, 0.5f, zpos);
     glTranslatef(xpos, 0.5f, zpos);
     glRotatef(xrot,1.0,0.0,0.0);
-    glRotatef(yrot,0.0,0.0,1.0); */
+    glRotatef(yrot,0.0,0.0,1.0);
 
     /* Drawing the moving cube */
+    glBindTexture(GL_TEXTURE_2D, texture[2]);
+    location vertexData[12];
+    cubeData.generateRect(vertexData);
+    for(int i=0; i<6; i++){
+    	drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+    }
 
-    /*
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glutSolidCube(1.0f);
-    */
 
     /* Draw it to the screen */
     glLoadIdentity();
@@ -735,6 +773,12 @@ int drawGLScene( void )
         	drawParticles((flameData.at(i)).v);
      glDisable(GL_BLEND);
 
+     /* Draw Black Holes */
+     glLoadIdentity( );
+     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+     len = holesData.size();
+     for(int i=0; i<len; i++)
+    	 drawHoles((holesData.at(i)).pos.v, (holesData.at(i)).radius);
 
     SDL_GL_SwapBuffers( );
 
@@ -743,10 +787,12 @@ int drawGLScene( void )
     {
 	GLint t = SDL_GetTicks();
 	if (t - T0 >= 5000) {
+
 	    GLfloat seconds = (t - T0) / 1000.0;
 	    GLfloat fps = Frames / seconds;
 	    printf("%d frames in %g seconds = %g FPS\n", Frames, seconds, fps);
 	    T0 = t;
+	    col = ( ++col ) % 12;
 	    Frames = 0;
 	}
     }
