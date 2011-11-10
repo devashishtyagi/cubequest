@@ -70,7 +70,7 @@ GLuint texture[1];
 
 /*angle of rotation*/
 float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0,xpos1=0.0,zpos1=0.0;
-float delta=2;
+float delta=1;
 float cRadius = 10.0f; // our radius distance from our character
 
 float lastx, lasty;
@@ -132,39 +132,50 @@ int resizeWindow( int width, int height )
 
     return( TRUE );
 }
-
+float mod(float a)
+{
+	if(a>=0.00)
+		return a;
+	else
+	   return -a;
+}
 /* function to handle key press events */
 void handleKeyPress( SDL_keysym *keysym )
 {
+	 float xrotrad, yrotrad;
+
 	switch( (keysym->sym) ){
 		case SDLK_ESCAPE:
 			Quit(0);
 			break;
 			case SDLK_LEFT:
-					float yrotrad;
-					yrotrad = (yrot / 180 * 3.141592654f);
-					xpos1 += float(cos(yrotrad)) *delta*0.01;
-					//zpos1 -= float(sin(yrotrad)) *delta*0.01;
-					eye[0]+=0.1;
-				 break;
+				printf("IN left\n");
+				printf("%f\n",yrot);
+				yrotrad = (yrot / 180 * 3.141592654f);
+				xpos1 -= mod(float(cos(yrotrad))) *delta*0.01;
+				zpos1 -= mod(float(sin(yrotrad))) *delta*0.01;
+				break;
+
 	        case SDLK_RIGHT:
-	            yrotrad = (yrot / 180 * 3.141592654f);
-	            xpos1 -= float(cos(yrotrad)) *delta*0.01;
-	            //zpos1 += float(sin(yrotrad)) *delta*0.01;
-	          break;
+	        	printf("IN right\n");
+	        	yrotrad = (yrot / 180 * 3.141592654f);
+	        	xpos1 += mod(float(cos(yrotrad))) *delta*0.01;
+	        	zpos1 += mod(float(sin(yrotrad))) *delta*0.01;
+	        	break;
 	        case SDLK_UP:
-	            float xrotrad;
-	            yrotrad = (yrot / 180 * 3.141592654f);
-	            xrotrad = (xrot / 180 * 3.141592654f);
-	            //xpos1 += float(sin(yrotrad))*delta*0.01;
-	            zpos1 += float(cos(yrotrad))*delta*0.01;
-	            ypos -= float(sin(xrotrad));
-	          break;
+	        	printf("IN up\n");
+	        	yrotrad = (yrot / 180 * 3.141592654f);
+			    xrotrad = (xrot / 180 * 3.141592654f);
+			    xpos1 += mod(float(sin(yrotrad)))*delta*0.01;
+			    zpos1 -=mod(float(cos(yrotrad)))*delta*0.01;
+			    ypos -= float(sin(xrotrad));
+			    break;
 	        case SDLK_DOWN:
+	        	printf("IN down\n");
 	            yrotrad = (yrot / 180 * 3.141592654f);
 	            xrotrad = (xrot / 180 * 3.141592654f);
-	            //xpos1 -= float(sin(yrotrad))*delta*0.01;
-	            zpos1 -= float(cos(yrotrad))*delta*0.01;;
+	            xpos1 -= mod(float(sin(yrotrad)))*delta*0.01;
+	            zpos1 += mod(float(cos(yrotrad)))*delta*0.01;;
 	            ypos += float(sin(xrotrad));
 	          break;
 	        default:
@@ -175,19 +186,17 @@ void handleKeyPress( SDL_keysym *keysym )
 }
 
 /* handling mouse event */
-void mouseMovement(int x,int y) {
-    int diffx=x-lastx; //check the difference between the current x and the last x position
-    int diffy=y-lasty; //check the difference between the  current y and the last y position
-    lastx=x; //set lastx to the current x position
-    lasty=y; //set lasty to the current y position
-    xrot += (float) diffy; //set the xrot to xrot with the addition of the difference in the y position
+void mouseMovement(int x,int y,int z) {
+if(z==1)
+{
+    int diffx=x-lastx; 			//check the difference between the current x and the last x position
+    int diffy=y-lasty; 			//check the difference between the  current y and the last y position
+    lastx=x; 					//set lastx to the current x position
+    lasty=y; 					//set lasty to the current y position
+    xrot += (float) diffy; 	   //set the xrot to xrot with the addition of the difference in the y position
     yrot += (float) diffx;    //set the xrot to yrot with the addition of the difference in the x position
-   printf("%f\n",xrot);
-   printf("%f\n",yrot);
-
-  // eye[0] = eye[0] + xrot*0.00001;
-  // eye[1] = eye[1] + yrot*0.000001;
 }
+   }
 
 
 /* setting up shaders for the program */
@@ -249,6 +258,7 @@ int initGL(void)
 		
 	setShaders();
 	
+	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
     glEnable( GL_TEXTURE_2D );
     glShadeModel( GL_SMOOTH );
     glClearColor( 0.0f, 0.0f, 0.0f, 0.5f );
@@ -317,7 +327,12 @@ void drawRect(float* min, float* max){
 int drawGLScene( void )
 {
 
-	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
+	object[0] += xpos1;
+	object[2] += zpos1;
+
+	eye[0] += xpos1;
+	eye[2] += zpos1;
+
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
@@ -326,7 +341,7 @@ int drawGLScene( void )
     int texture_location = glGetUniformLocation(p, "texture");
     glUniform1i(texture_location, 0);
     glBindTexture(GL_TEXTURE_2D, texture[0]);	
-  	
+
     /*for(int i=0; i<field_obj; i++){
     	drawRect(field[2*i+1], field[2*i]);
     }*/
@@ -345,9 +360,9 @@ int drawGLScene( void )
     xpos1*=0.98;
     zpos1*=0.98;
 
-    glTranslatef(xpos, 0.5f, zpos-cRadius);
+    glTranslatef(xpos, 0.5f, zpos);
     glRotatef(xrot,1.0,0.0,0.0);
-
+    glRotatef(yrot,0.0,0.0,1.0);
     /* Drawing the moving cube */
     glColor3f(1.0f, 0.0f, 0.0f);
     glutSolidCube(1.0f);
@@ -449,7 +464,7 @@ int main( int argc, char **argv )
 			    done = TRUE;
 			    break;
 			case SDL_MOUSEMOTION:
-				mouseMovement((int) &event.motion.x, (int) &event.motion.y);
+				mouseMovement( event.motion.xrel,event.motion.yrel,event.motion.state);
 				break;
 			default:
 			    break;
