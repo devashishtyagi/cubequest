@@ -10,6 +10,8 @@
 #include <SDL/SDL.h>
 #include <SDL/SDL_audio.h>
 
+#include "btBulletDynamicsCommon.h"
+
 #include "textfile.h"
 #include "parser.cpp"
 
@@ -35,7 +37,6 @@ Uint32 wav_bytes=0;
 /* playfield sml */
 char filename[] = "data/playfield.xml";
 
-int to_reflect=0;
 /* playfield data */
 vector<wall> wallData;
 vector<obstacle> obsData;
@@ -43,36 +44,32 @@ vector<holes> holesData;
 vector<location> flameData, powerData;
 
 /* cube drawing data */
-wall cubeData(location(-1.0, 0.0, -2.0), location(1.0, 2.0, 0.0));
+wall cubeData(location(-1.0, 2.0, -2.0), location(1.0, 4.0, 0.0));
 
-/* Storage for display list of the playfield */
-GLuint playfieldList;
+/* Simulation data */
+static float simTime = 0.0;
+static btScalar matrix[16];
+static btTransform trans;
+static btDiscreteDynamicsWorld *dynamicsWorld;
+static vector<btRigidBody*> simWall;
+static btRigidBody *simCube;
+
+/* Surface about which reflection is to occur */
+int to_reflect=0;
+
 /*the light position*/
 GLfloat lightZeroPosition[] = {0.0, 4.5, 10.0, 1.0};
 GLfloat lightZeroColor[] = {1.0, 0.0, 0.0, 1.0}; /* green-tinted */
 GLfloat lightOnePosition[] = {0.0, 4.5, 10.0, 0.0};
 GLfloat lightOneColor[] = {1.0, 0.0, 0.0, 1.0}; /* red-tinted */
 
-
 /* variables specifying the camera attributes */
+float eyec[] = {2.0f, 5.0f, 10.0f};
 float eye[] = {2.0f, 5.0f, 10.0f};
 float object[] = {0.0f, 0.0f, 0.0f};
 float normal[] = {0.0f, 1.0f, 0.0f};
 
-/* array specifying the screen*/
-float field[][3] = {{12.0, 0.0, 3.0},{-12.0, 0.0, -15.0},
-				  {12.0, 8.0, 3.0},{12.0, 0.0, -15.0},
-				  {-12.0, 8.0, 3.0},{-12.0, 0.0, -15.0},
-				  {-4.0, 8.0, -15.0},{ -12.0, 0.0, -15.0},
-				  {12.0, 8.0, -15.0},{ 4.0, 0.0, -15.0},
-				  {4.0, 3.0, -15.0},{-4.0, 0.0, -15.0},
-				  {4.0, 3.0, -15.0},{-4.0, 3.0, -25.0},
-				  {-4.0, 8.0, -15.0},{-4.0, 3.0, -25.0},
-				  {4.0, 8.0, -15.0},{4.0, 3.0, -25.0}
-				  };
-
-int field_obj = 9;
-
+/* Particle system definitions */
 int rainbow=FALSE;
 float slowdown = 1000.0f; /* Slow Down Particles                                */
 float xspeed;          /* Base X Speed (To Allow Keyboard Direction Of Tail) */
@@ -131,25 +128,32 @@ particle particles[MAX_PARTICLES];
 /* objects specifying the shaders */
 GLuint v,f,p;
 
-/* light position */
-float lpos[4] = {1,0.5,1,0};
-
 /* This is our SDL surface */
 SDL_Surface *surface;
-char filelocation[] = "data/cube.bmp";
+char filelocation[] = "data/plate.bmp";
 char cubefilename[] = "data/cube.bmp";
 
 /* Storage For One Texture ( NEW ) */
 GLuint texture[3];
 
-/*angle of rotation*/
-float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, angle=0.0,xpos1=0.0,zpos1=0.0;
-float delta=2;
-float cRadius = 10.0f; // our radius distance from our character
-
-float lastx, lasty;
-
+/* Music functionality */
 int running;
+
+/* Cleaning up simulation */
+void SimQuit(){
+	int len = (int) simWall.size();
+	for(int i=0; i<len; i++)
+		delete simWall.at(i);
+	delete simCube;
+	delete dynamicsWorld;
+}
+
+void Quit( int returnCode )
+{
+	SimQuit();
+    SDL_Quit( );
+    exit( returnCode );
+}
 
 void audio_callback(void *udata, Uint8 *stream, int len)
 {
@@ -173,13 +177,6 @@ void audio_callback(void *udata, Uint8 *stream, int len)
     pos+=len;
     fprintf(stderr,".");
   }
-}
-
-
-void Quit( int returnCode )
-{
-    SDL_Quit( );
-    exit( returnCode );
 }
 
 /* function to load in bitmap as a GL texture */
@@ -334,8 +331,7 @@ float mod(float a)
 /* function to handle key press events */
 void handleKeyPress( SDL_keysym *keysym )
 {
-	 float xrotrad, yrotrad;
-
+	btVector3 velocity(0.0,0.0,0.0);
 	switch( (keysym->sym) ){
 		case SDLK_ESCAPE:
 			Quit(0);
@@ -372,115 +368,27 @@ void handleKeyPress( SDL_keysym *keysym )
 		     */
 		    zoom -= 0.01f;
 		    break;
-	
 		case SDLK_LEFT: 
-			   	yrotrad = (yrot / 180 * 3.141592654f);
-			   	xpos1 -= mod(float(cos(yrotrad))) *delta*0.01;
-			    zpos1 -= mod(float(sin(yrotrad))) *delta*0.01;
-				    /* Left arrow key was pressed
-				     * this decreases the particles' x movement
-				     */
-				/*if ( xspeed > -200.0f )
-					xspeed--;
-*/
-			    	break;
-	        case SDLK_RIGHT:
-				yrotrad = (yrot / 180 * 3.141592654f);
-			    	xpos1 += mod(float(cos(yrotrad))) *delta*0.01;
-    				zpos1 += mod(float(sin(yrotrad))) *delta*0.01;
-				    /* Right arrow key was pressed
-				     * this increases the particles' x movement
-				     */
-	/*			    if ( xspeed < 200.0f )
-					xspeed++;
-		*/
-	          		break;
-	        case SDLK_UP:
-	               		yrotrad = (yrot / 180 * 3.141592654f);
-				xrotrad = (xrot / 180 * 3.141592654f); 
-				xpos1 += mod(float(sin(yrotrad)))*delta*0.01;
-				zpos1 -=mod(float(cos(yrotrad)))*delta*0.01;
-				ypos -= float(sin(xrotrad));
-			/*for the particle effect*/
-			 /*	if ( yspeed < 200.0f )
-					yspeed++;
-	   			*/break;
-
-	        case SDLK_DOWN:
-	            		yrotrad = (yrot / 180 * 3.141592654f);
-	            		xrotrad = (xrot / 180 * 3.141592654f);
-	            		xpos1 -= mod(float(sin(yrotrad)))*delta*0.01;
-	            		zpos1 += mod(float(cos(yrotrad)))*delta*0.01;;
-	            		ypos += float(sin(xrotrad));
-				/* Down arrow key was pressed
-					     * this decreases the particles' y movement
-					     */
-				/*if ( yspeed > -200.0f )
-					yspeed--;
-*/
-	          		break;
-	case SDLK_KP8:
-	    /* NumPad 8 key was pressed
-	     * increase particles' y gravity
-	     */
-	    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
-		if ( particles[loop].yg < 1.5f )
-		    particles[loop].yg += 0.01f;
-	    break;
-	case SDLK_KP2:
-	    /* NumPad 2 key was pressed
-	     * decrease particles' y gravity
-	     */
-	    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
-		if ( particles[loop].yg > -1.5f )
-		    particles[loop].yg -= 0.01f;
-	    break;
-	case SDLK_KP6:
-	    /* NumPad 6 key was pressed
-	     * this increases the particles' x gravity
-	     */
-	    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
-		if ( particles[loop].xg < 1.5f )
-		    particles[loop].xg += 0.01f;
-	    break;
-	case SDLK_KP4:
-	    /* NumPad 4 key was pressed
-	     * this decreases the particles' y gravity
-	     */
-	    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
-		if ( particles[loop].xg > -1.5f )
-		    particles[loop].xg -= 0.01f;
-	    break;
-	case SDLK_TAB:
-	    /* Tab key was pressed
-	     * this resets the particles and makes them re-explode
-	     */
-	    for ( loop = 0; loop < MAX_PARTICLES; loop++ )
-		{
-		   int color = ( loop + 1 ) / ( MAX_PARTICLES / 12 );
-		   float xi, yi, zi;
-		   xi = ( float )( ( rand( ) % 50 ) - 26.0f ) * 10.0f;
-		   yi = zi = ( float )( ( rand( ) % 50 ) - 25.0f ) * 10.0f;
-
-		   ResetParticle( loop, color, xi, yi, zi );
-		}
-	    break;
-	case SDLK_RETURN:
-	    /* Return key was pressed
-	     * this toggles the rainbow color effect
-	     */
-	    rainbow = !rainbow;
-	    delay = 25;
-	    break;
-	case SDLK_SPACE:
-	    /* Spacebar was pressed
-	     * this turns off rainbow-ing and manually cycles through colors
-	     */
-	    rainbow = FALSE;
-	    delay = 0;
-	    col = ( ++col ) % 12;
-	    break;
-	    default:
+			velocity = simCube->getLinearVelocity();
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(-10.0,0,0));
+			break;
+	    case SDLK_RIGHT:
+			velocity = simCube->getLinearVelocity();
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(10.0,0,0));
+			break;
+	    case SDLK_UP:
+			velocity = simCube->getLinearVelocity();
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(0,0,-10.0));
+			break;
+	    case SDLK_DOWN:
+			velocity = simCube->getLinearVelocity();
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(0,0,10.0));
+			break;
+		default:
 	       break;
 	  }
 
@@ -490,20 +398,6 @@ void handleKeyPress( SDL_keysym *keysym )
 /* handling mouse event */
 
 void mouseMovement(int x,int y,int z) {
-if(z==1)
-{
-    int diffx=x-lastx; //check the difference between the current x and the last x position
-    int diffy=y-lasty; //check the difference between the  current y and the last y position
-    lastx=x; //set lastx to the current x position
-    lasty=y; //set lasty to the current y position
-    xrot += (float) diffy; //set the xrot to xrot with the addition of the difference in the y position
-    yrot += (float) diffx;    //set the xrot to yrot with the addition of the difference in the x position
-}
-   printf("%f\n",xrot);
-   printf("%f\n",yrot);
-
-  // eye[0] = eye[0] + xrot*0.00001;
-  // eye[1] = eye[1] + yrot*0.000001;
 }
 
 
@@ -512,8 +406,8 @@ if(z==1)
 void setShaders(){
 	char *vs = NULL, *fs = NULL;
 	
-	vs = textFileRead("shaders/bloom1.vs");
-	fs = textFileRead("shaders/bloom_final.fs");
+	vs = textFileRead("shaders/fxaa.vs");
+	fs = textFileRead("shaders/fxaa.fs");
 	
 	v = glCreateShader(GL_VERTEX_SHADER);
 	f = glCreateShader(GL_FRAGMENT_SHADER);
@@ -540,10 +434,59 @@ void setShaders(){
 	glUseProgram(p);
 }
 
-void genDisplayList(){
+/* initializing the simulation environment */
+int initSim(void){
+	btQuaternion qtn;
 
+	btCollisionShape *shape;
+	btDefaultMotionState *motionState;
+
+	btDefaultCollisionConfiguration *collisionCfg
+	= new btDefaultCollisionConfiguration();
+
+	btAxisSweep3 *axisSweep
+	= new btAxisSweep3(btVector3(-100,-100,-100), btVector3(100,100,100), 128);
+
+	dynamicsWorld = new btDiscreteDynamicsWorld(new btCollisionDispatcher(collisionCfg),
+	axisSweep, new btSequentialImpulseConstraintSolver, collisionCfg);
+
+	dynamicsWorld->setGravity(btVector3(0, -10, 0));
+
+	btRigidBody::btRigidBodyConstructionInfo *boxRigidBodyCI;
+
+	/* simulating the cube */
+	shape = new btBoxShape(btVector3((cubeData.max.v[0] - cubeData.min.v[0])/2,(cubeData.max.v[1] - cubeData.min.v[1])/2,(cubeData.max.v[2] - cubeData.min.v[2])/2));
+	trans.setIdentity();
+	qtn.setEuler(0.8,0.7,0.4);
+	trans.setRotation(qtn);
+	trans.setOrigin(btVector3(btVector3((cubeData.min.v[0]+cubeData.max.v[0])/2,(cubeData.min.v[1]+cubeData.max.v[1])/2,(cubeData.min.v[2]+cubeData.max.v[2])/2)));
+	motionState = new btDefaultMotionState(trans);
+	btScalar mass = 1;
+	btVector3 Intertia(0,0,0);
+	shape->calculateLocalInertia(mass, Intertia);
+	boxRigidBodyCI = new btRigidBody::btRigidBodyConstructionInfo(mass, motionState, shape, Intertia);
+	boxRigidBodyCI->m_restitution = 0.4;
+	simCube = new btRigidBody(*boxRigidBodyCI);
+	simCube->setActivationState(DISABLE_DEACTIVATION);
+	dynamicsWorld->addRigidBody(simCube);
+
+	/* simulating the rest of the environment */
+	int len = (int) wallData.size();
+	for(int i=0; i<len; i++){
+		shape = new btBoxShape(btVector3((wallData.at(i).max.v[0] - wallData.at(i).min.v[0])/2,(wallData.at(i).max.v[1] - wallData.at(i).min.v[1])/2,(wallData.at(i).max.v[2] - wallData.at(i).min.v[2])/2));
+		trans.setIdentity();
+		qtn.setEuler(0, 0.0, 0.0);
+		trans.setRotation(qtn);
+		trans.setOrigin(btVector3((wallData.at(i).max.v[0] + wallData.at(i).min.v[0])/2,(wallData.at(i).max.v[1] + wallData.at(i).min.v[1])/2,(wallData.at(i).max.v[2] + wallData.at(i).min.v[2])/2));
+		motionState = new btDefaultMotionState(trans);
+		boxRigidBodyCI = new btRigidBody::btRigidBodyConstructionInfo(btScalar(0.0), motionState, shape, btVector3(0,0,0));
+		boxRigidBodyCI->m_friction = 0.1;
+		simWall.push_back(new btRigidBody(*boxRigidBodyCI));
+		dynamicsWorld->addRigidBody(simWall.at(i));
+	}
+
+	return 1;
 }
-
 /* general OpenGL initialization function */
 int initGL(void)
 {
@@ -568,7 +511,6 @@ int initGL(void)
 	
 	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
     glEnable( GL_TEXTURE_2D );
-    //glEnable( GL_TEXTURE_2D )
     glShadeModel( GL_SMOOTH );
     glClearColor( 0.0f, 0.0f, 0.0f, 0.5f );
     glClearDepth( 1.0f );
@@ -576,6 +518,7 @@ int initGL(void)
     glEnable( GL_DEPTH_TEST );
     glDepthFunc( GL_LEQUAL );
     glHint( GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST );
+
     /* Enable Blending */
     glHint( GL_POINT_SMOOTH_HINT, GL_NICEST );
     /* Enable Texture Mapping */
@@ -592,7 +535,7 @@ int initGL(void)
 	    yi = zi = ( float )( ( rand( ) % 50 ) - 25.0f ) * 10.0f;
 
 	    ResetParticle( loop, color, xi, yi, zi );
-        }
+     }
 
 
 
@@ -604,15 +547,19 @@ int initGL(void)
     getFlameData(data4, flameData);
     getPowerData(data5, powerData);
 
-    genDisplayList();
+	if (!initSim()){
+		cout <<"Problem with simulation initialization\n";
+		Quit(0);
+	}
+
     glMatrixMode(GL_MODELVIEW);
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
-  glLightfv(GL_LIGHT0, GL_DIFFUSE, lightZeroColor);
-  glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.1);
-  glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.05);
-  glLightfv(GL_LIGHT1, GL_DIFFUSE, lightOneColor);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT1);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightZeroColor);
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.1);
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.05);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, lightOneColor);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_LIGHT1);
 
     glLightfv(GL_LIGHT0, GL_POSITION, lightZeroPosition);
     glLightfv(GL_LIGHT1, GL_POSITION, lightOnePosition);
@@ -759,46 +706,58 @@ int drawGLScene( void )
     static GLint T0     = 0;
     static GLint Frames = 0;
 
-	object[0] += xpos1;
-	object[2] += zpos1;
+    float xpos = simCube->getCenterOfMassPosition().getX();
+    float ypos = simCube->getCenterOfMassPosition().getY();
+    float zpos = simCube->getCenterOfMassPosition().getZ();
 
-	eye[0] += xpos1;
-	eye[2] += zpos1;
+    printf("%f %f %f\n",xpos,ypos,zpos);
+    object[0] = xpos;
+	object[1] = ypos;
+	object[2] = zpos;
+
+	eye[0] = xpos + eyec[0];
+	eye[1] = ypos + eyec[1];
+	eye[2] = zpos + eyec[2];
+
+
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
 
     int len;
-	// glLightfv(GL_LIGHT0, GL_POSITION, lightZeroPosition);
-	//   glLightfv(GL_LIGHT1, GL_POSITION, lightOnePosition);
 
     glDisable(GL_DEPTH_TEST);
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-      /* Draw 1 into the stencil buffer. */
-      glEnable(GL_STENCIL_TEST);
-      glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
-      glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
+    /* Draw 1 into the stencil buffer. */
+    glEnable(GL_STENCIL_TEST);
+    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
 
-      /* Now render floor; floor pixels just get their stencil set to 1. */
-	/* Here I need to render the top of the floor only where the stencil buffer values would be set to 1 Thus first check which cube and then draw only the top surface*/
+    /* Now render floor; floor pixels just get their stencil set to 1. */
+    /* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
+	   Thus first check which cube and then draw only the top surface*/
     glActiveTexture(GL_TEXTURE0);
+
+    /* Shader Syntax Begins */
     int texture_location = glGetUniformLocation(p, "texture");
     glUniform1i(texture_location, 0);
+    /* Shader Syntax Ends */
+
     glBindTexture(GL_TEXTURE_2D, texture[0]);	
     int mycube=0;
     glColor3f(1.0, 1.0, 1.0);
     len = (int) wallData.size();
-    for(int j=0; j<len; j++){/*I need to check which cube should render the reflecting surface*/
-    if(xpos<=(wallData[j]).max.v[0]-0.5 && xpos>=(wallData[j]).min.v[0] + 0.5)
-	{
-		if(zpos<=(wallData[j]).max.v[2] - 0.5 && zpos>=(wallData[j]).min.v[2] + 0.5)
-		{
-			mycube=j;
-			to_reflect=1;
-			break;
-			
+    for(int j=0; j<len; j++){
+    /*I need to check which cube should render the reflecting surface*/
+    	if(xpos<=(wallData[j]).max.v[0]-0.5 && xpos>=(wallData[j]).min.v[0] + 0.5)
+    	{
+    		if(zpos<=(wallData[j]).max.v[2] - 0.5 && zpos>=(wallData[j]).min.v[2] + 0.5)
+    		{
+    			mycube=j;
+    			to_reflect=1;
+    			break;
+    		}
 		}
-	}
 	}
        
 	float min[3], max[3];
@@ -810,114 +769,100 @@ int drawGLScene( void )
 	max[2] = (wallData[mycube]).max.v[2];
 	drawRect(min, max);
     
-      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-      glEnable(GL_DEPTH_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
 
-      /* Now, only render where stencil is set to 1. */
-      glStencilFunc(GL_EQUAL, 1, 0xffffffff);  /* draw if ==1 */
-      glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    /* Now, only render where stencil is set to 1. */
+    glStencilFunc(GL_EQUAL, 1, 0xffffffff);  /* draw if ==1 */
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-      //glEnable(GL_CULL_FACE);
-      glEnable(GL_NORMALIZE);
-     // glCullFace(GL_FRONT);
+    //glEnable(GL_CULL_FACE);
+    glEnable(GL_NORMALIZE);
+    // glCullFace(GL_FRONT);
 
-      xpos=xpos+xpos1;
-      zpos=zpos+zpos1;
-      xpos1*=0.98;
-      zpos1*=0.98;
-
-     glTranslatef(xpos, 0.0f, zpos);
-     glRotatef(xrot,1.0,0.0,0.0);
-     glRotatef(yrot,0.0,0.0,1.0);
-     glTranslatef(0,2*wallData[mycube].max.v[1],0);
-     glScalef(1.0, -1.0, 1.0);
-     glColor3f(1.0,0.0,0.0);
-     //glutSolidCube(2);
-     location vertexData[12];
-     if(to_reflect==1)
+    simCube->getMotionState()->getWorldTransform(trans);
+    trans.getOpenGLMatrix(matrix);
+    glTranslatef(0,2*wallData[mycube].max.v[1],0);
+    glScalef(1.0, -1.0, 1.0);
+    glMultMatrixf(matrix);
+    glColor3f(1.0,0.0,0.0);
+    location vertexData[12];
+    if(to_reflect==1)
      {
-    /* Drawing the moving cube */
-    glBindTexture(GL_TEXTURE_2D, texture[2]);
-    
-   cubeData.generateRect(vertexData);
-    for(int i=0; i<6; i++){
-    	drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-    	}
-    }
-    to_reflect=0;
-      /* Disable noramlize again and re-enable back face culling. */
-      glDisable(GL_NORMALIZE);
-      //glCullFace(GL_BACK);
-      //glDisable(GL_CULL_FACE);
+    	 /* Drawing the moving cube */
+    	 glBindTexture(GL_TEXTURE_2D, texture[2]);
+    	 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
+    	     		 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
+    	 newcubeData.generateRect(vertexData);
+    	 for(int i=0; i<6; i++){
+    		 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+    	 }
+     }
 
-    glDisable(GL_STENCIL_TEST);
-    glLoadIdentity( );
-    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-
+     to_reflect=0;
+     /* Disable noramlize again and re-enable back face culling. */
+     glDisable(GL_NORMALIZE);
+     //glCullFace(GL_BACK);
+     //glDisable(GL_CULL_FACE);
+     glDisable(GL_STENCIL_TEST);
+     glLoadIdentity( );
+     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
     /* Draw "top" of floor.  Use blending to blend in reflection. */
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+     glEnable(GL_BLEND);
+     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
-    glActiveTexture(GL_TEXTURE0);
-    texture_location = glGetUniformLocation(p, "texture");
-    glUniform1i(texture_location, 0);
-    glBindTexture(GL_TEXTURE_2D, texture[0]);	
+     glActiveTexture(GL_TEXTURE0);
+     texture_location = glGetUniformLocation(p, "texture");
+     glUniform1i(texture_location, 0);
+     glBindTexture(GL_TEXTURE_2D, texture[0]);
 
     /*for(int i=0; i<field_obj; i++){
     	drawRect(field[2*i+1], field[2*i]);
     }*/
 
-   glColor4f(1.0, 1.0, 1.0,0.4f);
-   drawRect(min, max);
-   glDisable(GL_BLEND);
+     glColor4f(1.0, 1.0, 1.0,0.4f);
+     drawRect(min, max);
+     glDisable(GL_BLEND);
    
-   
-    len = (int) wallData.size();
-    for(int j=0; j<len; j++){
-    location vertexData[12];
-    (wallData.at(j)).generateRect(vertexData);
-  	for(int i = 0; i < 6; i++){
-  		if (i!=4 || mycube!=j)
-  		   drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-  	}
-    }
+     len = (int) wallData.size();
+     for(int j=0; j<len; j++){
+    	 location vertexData[12];
+    	 (wallData.at(j)).generateRect(vertexData);
+    	 for(int i = 0; i < 6; i++){
+    		 if (i!=4 || mycube!=j)
+    			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+    	 }
+     }
     
-    
-    glLoadIdentity( );
-    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-    xpos=xpos+xpos1;
-    zpos=zpos+zpos1;
-    xpos1*=0.98;
-    zpos1*=0.98;
-
-    glTranslatef(xpos, 0.0f, zpos);
-    glRotatef(xrot,1.0,0.0,0.0);
-    glRotatef(yrot,0.0,0.0,1.0);
+     glLoadIdentity( );
+     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
 
     /* Drawing the moving cube */
-    glBindTexture(GL_TEXTURE_2D, texture[2]);
-    /*location vertexData[12];*/
-    cubeData.generateRect(vertexData);
-    for(int i=0; i<6; i++){
-    	drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-    }
+     glBindTexture(GL_TEXTURE_2D, texture[2]);
 
+     simCube->getMotionState()->getWorldTransform(trans);
+     trans.getOpenGLMatrix(matrix);
+     glMultMatrixf(matrix);
+     wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
+    		 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
+     newcubeData.generateRect(vertexData);
+     for(int i=0; i<6; i++){
+    	 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+     }
 
-
-    /* Draw it to the screen */
+    /* Draw flame to the screen */
     glLoadIdentity();
     
     glEnable( GL_BLEND );
-        /* Type Of Blending To Perform */
-        glBlendFunc( GL_SRC_ALPHA, GL_ONE );
-        /* Really Nice Point Smoothing */
-        len = (int) flameData.size();
-        for(int i=0; i<len; i++)
-        	drawParticles((flameData.at(i)).v);
-     glDisable(GL_BLEND);
+    /* Type Of Blending To Perform */
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE );
+    /* Really Nice Point Smoothing */
+    len = (int) flameData.size();
+    for(int i=0; i<len; i++)
+		drawParticles((flameData.at(i)).v);
+    glDisable(GL_BLEND);
 
-     /* Draw Black Holes */
+    /* Draw Black Holes */
      glLoadIdentity( );
      gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
      len = holesData.size();
@@ -942,6 +887,18 @@ int drawGLScene( void )
     }
 
     return( TRUE );
+}
+
+/* Simulation Timer */
+void SimTime(void){
+	float dtime = simTime;
+	simTime = glutGet(GLUT_ELAPSED_TIME) / 500.0;
+	dtime = simTime - dtime;
+
+	if(dynamicsWorld)
+	dynamicsWorld->stepSimulation(dtime, 10);
+
+	drawGLScene();
 }
 
 int main( int argc, char **argv )
@@ -1144,12 +1101,13 @@ int main( int argc, char **argv )
 
 	    /* If rainbow coloring is turned on, cycle the colors */
 	    if ( rainbow && ( delay > 25 ) )
-		col = ( ++col ) % 12;
+		col = (++col ) % 12;
 
-	    if ( isActive )
-		drawGLScene( );
+	    if ( isActive ){
+	    	drawGLScene( );
+	    	SimTime();
+	    }
 	    delay++;
-
 	}
 	SDL_PauseAudio(1);
 
