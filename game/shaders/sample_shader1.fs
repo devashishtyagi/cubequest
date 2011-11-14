@@ -1,7 +1,7 @@
 varying float V;                    // generic varying
 varying float LightIntensity;
 
-uniform float Frequency;            // Stripe frequency = 6
+uniform float Frequency = 6;            // Stripe frequency = 6
 
 void main()
 {

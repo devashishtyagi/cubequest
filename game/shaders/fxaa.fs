@@ -1,8 +1,8 @@
 #version 120
 uniform sampler2D texture; // 0
-uniform float vx_offset;
-uniform float rt_w; // GeeXLab built-in
-uniform float rt_h; // GeeXLab built-in
+uniform float vx_offset = 0;
+uniform float rt_w = 400; // GeeXLab built-in
+uniform float rt_h = 600; // GeeXLab built-in
 uniform float FXAA_SPAN_MAX = 8.0;
 uniform float FXAA_REDUCE_MUL = 1.0/8.0;
 varying vec4 posPos;
@@ -73,5 +73,5 @@ vec4 PostFX(sampler2D tex, vec2 uv, float time)
 void main()
 {
   vec2 uv = gl_TexCoord[0].st;
-  gl_FragColor = PostFX(tex0, uv, 0.0);
+  gl_FragColor = PostFX(texture, uv, 0.0);
 }

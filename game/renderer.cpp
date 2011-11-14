@@ -11,31 +11,38 @@
 #include <SDL/SDL_audio.h>
 
 #include "btBulletDynamicsCommon.h"
-
-#include "textfile.h"
+#include "fbo.h"
+#include "shader.h"
 #include "parser.cpp"
 
-#define WAV_FILE "music_game.wav"
-
-#define SCREEN_WIDTH  640
-#define SCREEN_HEIGHT 480
-#define SCREEN_BPP     16
-
-#define TRUE  1
-#define FALSE 0
+#define WAV_FILE "data/music_game.wav"
 
 /* Max number of particles */
 #define MAX_PARTICLES 150
 
-
 using namespace std;
+
+/* screen dimensions */
+int SCREEN_WIDTH  = 600;
+int SCREEN_HEIGHT = 600;
+int SCREEN_BPP = 16;
+
 
 Uint8 *audio_buf=NULL;
 Uint32 wav_bytes=0;
-
+/*creating the framebuffer object*/
+fbo *scene;
+fbo *scene2;
+fbo *scene3;
+fbo *cubescreen;
 
 /* playfield sml */
 char filename[] = "data/playfield.xml";
+char vertex_shader[] = "shaders/bloom1.vs";
+char fragment_shader[] = "shaders/bloom2.fs";
+char fragment_shadercombine[] = "shaders/fxaa.fs";
+char vertex_shadercombine[] = "shaders/fxaa.vs";
+
 
 /* playfield data */
 vector<wall> wallData;
@@ -63,6 +70,7 @@ GLfloat lightZeroColor[] = {1.0, 0.0, 0.0, 1.0}; /* green-tinted */
 GLfloat lightOnePosition[] = {0.0, 4.5, 10.0, 0.0};
 GLfloat lightOneColor[] = {1.0, 0.0, 0.0, 1.0}; /* red-tinted */
 
+
 /* variables specifying the camera attributes */
 float eyec[] = {2.0f, 5.0f, 10.0f};
 float eye[] = {2.0f, 5.0f, 10.0f};
@@ -79,6 +87,8 @@ float zoom = -10.0f;   /* Used To Zoom Out                                   */
 GLuint loop;           /* Misc Loop Variable                                 */
 GLuint col = 0;        /* Current Color Selection                            */
 GLuint delay;          /* Rainbow Effect Delay                               */
+Shader shader,shader2;
+
 
 /* Create our particle structure */
 typedef struct
@@ -124,10 +134,6 @@ static GLfloat colors[12][3] =
 /* Our beloved array of particles */
 particle particles[MAX_PARTICLES];
 
-
-/* objects specifying the shaders */
-GLuint v,f,p;
-
 /* This is our SDL surface */
 SDL_Surface *surface;
 char filelocation[] = "data/plate.bmp";
@@ -169,7 +175,6 @@ void audio_callback(void *udata, Uint8 *stream, int len)
       memcpy(stream,audio_buf+pos,maxlen);
       pos+=maxlen;
     }
-    fprintf(stderr,"!\n");
   }
   else
   {
@@ -184,7 +189,7 @@ int LoadGLTextures( )
 {
     int Status = FALSE;
     SDL_Surface *TextureImage[3];
-    
+
     if ( ( TextureImage[0] = SDL_LoadBMP( filelocation) ) )
         {
 	    Status = TRUE;
@@ -199,7 +204,7 @@ int LoadGLTextures( )
 	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         }
-        
+
     if ( TextureImage[0] )
 	    SDL_FreeSurface( TextureImage[0] );//GLuint texture[1];     /* Storage For Our Particle Texture                   */
 
@@ -256,25 +261,36 @@ int LoadGLTextures( )
 /* function to reset our viewport after a window resize */
 int resizeWindow( int width, int height )
 {
+	SCREEN_WIDTH = width;
+	SCREEN_HEIGHT = height;
     /* Height / width ration */
     GLfloat ratio;
- 
+
     if ( height == 0 )
 	height = 1;
 
     ratio = ( GLfloat )width / ( GLfloat )height;
     glViewport( 0, 0, ( GLint )width, ( GLint )height );
-    
+
     glMatrixMode( GL_PROJECTION );
     glLoadIdentity( );
 
-    gluPerspective( 45.0f, ratio, 0.1f, 100.0f );
+    gluPerspective( 60.0f, ratio, 1.0f, 100.0f );
 
     glMatrixMode( GL_MODELVIEW );
 
     glLoadIdentity( );
 
-  
+    scene = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    scene->initFrameBuffer();
+    scene2 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    scene2->initFrameBuffer();
+    scene3 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    scene3->initFrameBuffer();
+    cubescreen = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    cubescreen->initFrameBuffer();
+
+
     return( TRUE );
 }
 
@@ -368,7 +384,7 @@ void handleKeyPress( SDL_keysym *keysym )
 		     */
 		    zoom -= 0.01f;
 		    break;
-		case SDLK_LEFT: 
+		case SDLK_LEFT:
 			velocity = simCube->getLinearVelocity();
 			if (velocity.length() < 8.0)
 				simCube->applyCentralForce(btVector3(-10.0,0,0));
@@ -400,39 +416,6 @@ void handleKeyPress( SDL_keysym *keysym )
 void mouseMovement(int x,int y,int z) {
 }
 
-
-/* setting up shaders for the program */
-
-void setShaders(){
-	char *vs = NULL, *fs = NULL;
-	
-	vs = textFileRead("shaders/fxaa.vs");
-	fs = textFileRead("shaders/fxaa.fs");
-	
-	v = glCreateShader(GL_VERTEX_SHADER);
-	f = glCreateShader(GL_FRAGMENT_SHADER);
-	
-
-	const char * ff = fs;
-	const char * vv = vs;
-
-
-	glShaderSource(v, 1, &vv,NULL);
-	glShaderSource(f, 1, &ff,NULL);
-
-	free(vs);free(fs);
-
-		
-	glCompileShader(v);
-	glCompileShader(f);
-	
-	p = glCreateProgram();
-	glAttachShader(p,f);
-	glAttachShader(p,v);
-
-	glLinkProgram(p);
-	glUseProgram(p);
-}
 
 /* initializing the simulation environment */
 int initSim(void){
@@ -497,18 +480,16 @@ int initGL(void)
 
     if ( !LoadGLTextures( ) )
 		return FALSE;
-	
+
 	glewInit();
-	
+
 	if (glewIsSupported("GL_VERSION_2_0"))
 		printf("Ready for OpenGL 2.0\n");
 	else {
 		printf("OpenGL 2.0 not supported\n");
 		exit(1);
 	}
-		
-	setShaders();
-	
+
 	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
     glEnable( GL_TEXTURE_2D );
     glShadeModel( GL_SMOOTH );
@@ -525,6 +506,7 @@ int initGL(void)
     glEnable( GL_TEXTURE_2D );
     /* Select Our Texture */
     glBindTexture( GL_TEXTURE_2D, texture[1] );
+
 
     /* Reset all the particles */
     for ( loop = 0; loop < MAX_PARTICLES; loop++ )
@@ -564,6 +546,22 @@ int initGL(void)
     glLightfv(GL_LIGHT0, GL_POSITION, lightZeroPosition);
     glLightfv(GL_LIGHT1, GL_POSITION, lightOnePosition);
 
+    shader.init(vertex_shader,fragment_shader);
+    shader2.init(vertex_shadercombine,fragment_shadercombine);
+
+
+    scene = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    scene->initFrameBuffer();
+
+    scene2 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    scene2->initFrameBuffer();
+
+    scene3 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    scene3->initFrameBuffer();
+
+    cubescreen = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    cubescreen->initFrameBuffer();
+
 
     return( TRUE );
 }
@@ -571,10 +569,7 @@ int initGL(void)
 void drawHoles(float* pos, float radius){
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-
     glTranslatef(pos[0], pos[1], pos[2]);
-
-    glColor3f(0.0, 1.0, 0.0);
     glutWireSphere(radius, 8, 8);
 }
 
@@ -680,9 +675,9 @@ void drawRect(float* min, float* max){
 					glTexCoord2f(1.0f, 1.0f); glVertex3f(x+1, y, z);
 					glTexCoord2f(1.0f, 0.0f); glVertex3f(x+1, y, z+1);
 					glTexCoord2f(0.0f, 0.0f); glVertex3f(x, y, z+1);
-				glEnd(); 
+				glEnd();
 			}
-		}	
+		}
 	}
 	else{
 		int z = min[2], y, x;
@@ -710,8 +705,8 @@ int drawGLScene( void )
     float ypos = simCube->getCenterOfMassPosition().getY();
     float zpos = simCube->getCenterOfMassPosition().getZ();
 
-    printf("%f %f %f\n",xpos,ypos,zpos);
-    object[0] = xpos;
+
+	object[0] = xpos;
 	object[1] = ypos;
 	object[2] = zpos;
 
@@ -719,127 +714,31 @@ int drawGLScene( void )
 	eye[1] = ypos + eyec[1];
 	eye[2] = zpos + eyec[2];
 
-
-    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	scene->bind();
+	glClearColor(0.0,0.0,0.0,1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
 
-    int len;
-
-    glDisable(GL_DEPTH_TEST);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    /* Draw 1 into the stencil buffer. */
-    glEnable(GL_STENCIL_TEST);
-    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
-    glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
-
-    /* Now render floor; floor pixels just get their stencil set to 1. */
-    /* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
-	   Thus first check which cube and then draw only the top surface*/
-    glActiveTexture(GL_TEXTURE0);
-
-    /* Shader Syntax Begins */
-    int texture_location = glGetUniformLocation(p, "texture");
-    glUniform1i(texture_location, 0);
-    /* Shader Syntax Ends */
-
-    glBindTexture(GL_TEXTURE_2D, texture[0]);	
-    int mycube=0;
+    /* Draw all the walls */
     glColor3f(1.0, 1.0, 1.0);
-    len = (int) wallData.size();
-    for(int j=0; j<len; j++){
-    /*I need to check which cube should render the reflecting surface*/
-    	if(xpos<=(wallData[j]).max.v[0]-0.5 && xpos>=(wallData[j]).min.v[0] + 0.5)
-    	{
-    		if(zpos<=(wallData[j]).max.v[2] - 0.5 && zpos>=(wallData[j]).min.v[2] + 0.5)
-    		{
-    			mycube=j;
-    			to_reflect=1;
-    			break;
-    		}
-		}
-	}
-       
-	float min[3], max[3];
-	min[0] = (wallData[mycube]).min.v[0];
-	min[1] = (wallData[mycube]).max.v[1];	
-	min[2] = (wallData[mycube]).min.v[2];
-	max[0] = (wallData[mycube]).max.v[0];
-	max[1] = (wallData[mycube]).max.v[1];
-	max[2] = (wallData[mycube]).max.v[2];
-	drawRect(min, max);
-    
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-
-    /* Now, only render where stencil is set to 1. */
-    glStencilFunc(GL_EQUAL, 1, 0xffffffff);  /* draw if ==1 */
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-    //glEnable(GL_CULL_FACE);
-    glEnable(GL_NORMALIZE);
-    // glCullFace(GL_FRONT);
-
-    simCube->getMotionState()->getWorldTransform(trans);
-    trans.getOpenGLMatrix(matrix);
-    glTranslatef(0,2*wallData[mycube].max.v[1],0);
-    glScalef(1.0, -1.0, 1.0);
-    glMultMatrixf(matrix);
-    glColor3f(1.0,0.0,0.0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture[0]);
+    int len = (int) wallData.size();
     location vertexData[12];
-    if(to_reflect==1)
-     {
-    	 /* Drawing the moving cube */
-    	 glBindTexture(GL_TEXTURE_2D, texture[2]);
-    	 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
-    	     		 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
-    	 newcubeData.generateRect(vertexData);
-    	 for(int i=0; i<6; i++){
-    		 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-    	 }
-     }
-
-     to_reflect=0;
-     /* Disable noramlize again and re-enable back face culling. */
-     glDisable(GL_NORMALIZE);
-     //glCullFace(GL_BACK);
-     //glDisable(GL_CULL_FACE);
-     glDisable(GL_STENCIL_TEST);
-     glLoadIdentity( );
-     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-    /* Draw "top" of floor.  Use blending to blend in reflection. */
-     glEnable(GL_BLEND);
-     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-     glActiveTexture(GL_TEXTURE0);
-     texture_location = glGetUniformLocation(p, "texture");
-     glUniform1i(texture_location, 0);
-     glBindTexture(GL_TEXTURE_2D, texture[0]);
-
-    /*for(int i=0; i<field_obj; i++){
-    	drawRect(field[2*i+1], field[2*i]);
-    }*/
-
-     glColor4f(1.0, 1.0, 1.0,0.4f);
-     drawRect(min, max);
-     glDisable(GL_BLEND);
-   
-     len = (int) wallData.size();
      for(int j=0; j<len; j++){
     	 location vertexData[12];
     	 (wallData.at(j)).generateRect(vertexData);
     	 for(int i = 0; i < 6; i++){
-    		 if (i!=4 || mycube!=j)
     			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
     	 }
      }
-    
+
      glLoadIdentity( );
      gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-
     /* Drawing the moving cube */
+     glActiveTexture(GL_TEXTURE0);
      glBindTexture(GL_TEXTURE_2D, texture[2]);
-
      simCube->getMotionState()->getWorldTransform(trans);
      trans.getOpenGLMatrix(matrix);
      glMultMatrixf(matrix);
@@ -850,9 +749,9 @@ int drawGLScene( void )
     	 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
      }
 
-    /* Draw flame to the screen */
+     /* Draw flame to the screen */
     glLoadIdentity();
-    
+
     glEnable( GL_BLEND );
     /* Type Of Blending To Perform */
     glBlendFunc( GL_SRC_ALPHA, GL_ONE );
@@ -863,12 +762,312 @@ int drawGLScene( void )
     glDisable(GL_BLEND);
 
     /* Draw Black Holes */
-     glLoadIdentity( );
-     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+    glColor3f(1.0, 0.0, 0.0);
      len = holesData.size();
      for(int i=0; i<len; i++)
     	 drawHoles((holesData.at(i)).pos.v, (holesData.at(i)).radius);
 
+    scene->unbind();
+
+    /* Draw reflected cube */
+    cubescreen->bind();
+    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glLoadIdentity( );
+    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+
+    glDisable(GL_DEPTH_TEST);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+     /* Draw 1 into the stencil buffer. */
+	glEnable(GL_STENCIL_TEST);
+	glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+	glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
+
+	/* Now render floor; floor pixels just get their stencil set to 1. */
+	/* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
+	   Thus first check which cube and then draw only the top surface*/
+	int mycube=0;
+	glColor3f(1.0, 1.0, 1.0);
+	len = (int) wallData.size();
+	for(int j=0; j<len; j++){
+	/*I need to check which cube should render the reflecting surface*/
+		if(xpos<=(wallData[j]).max.v[0] && xpos>=(wallData[j]).min.v[0])
+		{
+			if(zpos<=(wallData[j]).max.v[2]&& zpos>=(wallData[j]).min.v[2])
+			{
+				mycube=j;
+				to_reflect=1;
+				break;
+			}
+		}
+	}
+
+	float min[3], max[3];
+	min[0] = (wallData[mycube]).min.v[0];
+	min[1] = (wallData[mycube]).max.v[1];
+	min[2] = (wallData[mycube]).min.v[2];
+	max[0] = (wallData[mycube]).max.v[0];
+	max[1] = (wallData[mycube]).max.v[1];
+	max[2] = (wallData[mycube]).max.v[2];
+	drawRect(min, max);
+
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+
+	/* Now, only render where stencil is set to 1. */
+	glStencilFunc(GL_EQUAL, 1, 0xffffffff);  /* draw if ==1 */
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	//glEnable(GL_CULL_FACE);
+	glEnable(GL_NORMALIZE);
+	// glCullFace(GL_FRONT);
+
+	simCube->getMotionState()->getWorldTransform(trans);
+	trans.getOpenGLMatrix(matrix);
+	glTranslatef(0,2*wallData[mycube].max.v[1],0);
+	glScalef(1.0, -1.0, 1.0);
+	glMultMatrixf(matrix);
+	glColor3f(1.0,0.0,0.0);
+	if(to_reflect==1)
+	 {
+		 /* Drawing the reflected cube */
+		 glBindTexture(GL_TEXTURE_2D, texture[2]);
+		 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
+					 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
+		 newcubeData.generateRect(vertexData);
+		 for(int i=0; i<6; i++){
+			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+		 }
+	 }
+
+	 to_reflect=0;
+	 /* Disable noramlize again and re-enable back face culling. */
+	 glDisable(GL_NORMALIZE);
+	 //glCullFace(GL_BACK);
+	 //glDisable(GL_CULL_FACE);
+	 glDisable(GL_STENCIL_TEST);
+
+    cubescreen->unbind();
+
+    /* Horizontal Blur */
+    scene2->bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glActiveTexture(GL_TEXTURE0);
+    scene->textureBind();
+    shader.bind();
+    GLuint tex_location = glGetUniformLocation(shader.id(), "tex0");
+    glUniform1i(tex_location, 0);
+    GLuint offset_location = glGetUniformLocation(shader.id(), "sampleOffset");
+    glUniform2f(offset_location, 2.0/(float) SCREEN_WIDTH, 0.0);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glViewport(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2f(-1.0,-1.0); // The bottom left corner
+
+    glTexCoord2f(0.0f, 1.0f);
+    glVertex2f(-1.0f, 1.0f); // The top left corner
+
+    glTexCoord2f(1.0f, 1.0f);
+    glVertex2f(1.0f, 1.0f); // The top right corner
+
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2f(1.0f, -1.0f); // The bottom right corner
+
+    glEnd();
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    shader.unbind();
+    scene->textureUnbind();
+    glDisable(GL_TEXTURE0);
+    scene2->unbind();
+
+    /* Vertically Blur */
+    scene3->bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glActiveTexture(GL_TEXTURE0);
+    scene->textureBind();
+    shader.bind();
+    tex_location = glGetUniformLocation(shader.id(), "tex0");
+    glUniform1i(tex_location, 0);
+    offset_location = glGetUniformLocation(shader.id(), "sampleOffset");
+    glUniform2f(offset_location, 0.0, 2.0/(float) SCREEN_WIDTH);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glViewport(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2f(-1.0,-1.0); // The bottom left corner
+
+    glTexCoord2f(0.0f, 1.0f);
+    glVertex2f(-1.0f, 1.0f); // The top left corner
+
+    glTexCoord2f(1.0f, 1.0f);
+    glVertex2f(1.0f, 1.0f); // The top right corner
+
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2f(1.0f, -1.0f); // The bottom right corner
+
+    glEnd();
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    shader.unbind();
+    scene->textureUnbind();
+    glDisable(GL_TEXTURE0);
+    scene3->unbind();
+
+    /* Blur and render FBO2 */
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_BLEND);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE );
+
+
+    glActiveTexture(GL_TEXTURE0);
+    scene->textureBind();
+    shader2.bind();
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2f(-1.0,-1.0); // The bottom left corner
+
+	glTexCoord2f(0.0f, 1.0f);
+	glVertex2f(-1.0f, 1.0f); // The top left corner
+
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex2f(1.0f, 1.0f); // The top right corner
+
+	glTexCoord2f(1.0f, 0.0f);
+	glVertex2f(1.0f, -1.0f); // The bottom right corner
+
+	glEnd();
+
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
+	glActiveTexture(GL_TEXTURE0);
+	scene2->textureBind();
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glBegin(GL_QUADS);
+	glTexCoord2f(0.0f, 0.0f);
+	glVertex2f(-1.0,-1.0); // The bottom left corner
+
+	glTexCoord2f(0.0f, 1.0f);
+	glVertex2f(-1.0f, 1.0f); // The top left corner
+
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex2f(1.0f, 1.0f); // The top right corner
+
+	glTexCoord2f(1.0f, 0.0f);
+	glVertex2f(1.0f, -1.0f); // The bottom right corner
+
+	glEnd();
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
+	glActiveTexture(GL_TEXTURE0);
+	scene3->textureBind();
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glBegin(GL_QUADS);
+	glTexCoord2f(0.0f, 0.0f);
+	glVertex2f(-1.0,-1.0); // The bottom left corner
+
+	glTexCoord2f(0.0f, 1.0f);
+	glVertex2f(-1.0f, 1.0f); // The top left corner
+
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex2f(1.0f, 1.0f); // The top right corner
+
+	glTexCoord2f(1.0f, 0.0f);
+	glVertex2f(1.0f, -1.0f); // The bottom right corner
+
+	glEnd();
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+
+    glActiveTexture(GL_TEXTURE0);
+	cubescreen->textureBind();
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glBegin(GL_QUADS);
+	glTexCoord2f(0.0f, 0.0f);
+	glVertex2f(-1.0,-1.0); // The bottom left corner
+
+	glTexCoord2f(0.0f, 1.0f);
+	glVertex2f(-1.0f, 1.0f); // The top left corner
+
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex2f(1.0f, 1.0f); // The top right corner
+
+	glTexCoord2f(1.0f, 0.0f);
+	glVertex2f(1.0f, -1.0f); // The bottom right corner
+
+	glEnd();
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    glDisable(GL_BLEND);
+    shader2.unbind();
     SDL_GL_SwapBuffers( );
 
     /* Gather our frames per second */
@@ -881,7 +1080,7 @@ int drawGLScene( void )
 	    GLfloat fps = Frames / seconds;
 	    printf("%d frames in %g seconds = %g FPS\n", Frames, seconds, fps);
 	    T0 = t;
-	    col = ( ++col ) % 12;
+	    col = (col+1) % 12;
 	    Frames = 0;
 	}
     }
@@ -956,7 +1155,7 @@ int main( int argc, char **argv )
 
     if ( videoInfo->blit_hw )
 	videoFlags |= SDL_HWACCEL;
-	
+
     SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
 
     surface = SDL_SetVideoMode( SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP,
@@ -1021,7 +1220,7 @@ int main( int argc, char **argv )
             &cvt,wavefmt.format,wavefmt.channels,wavefmt.freq,
             aget.format,aget.channels,aget.freq);
 
-    
+
     retval=SDL_BuildAudioCVT(&cvt,wavefmt.format,wavefmt.channels,
                              wavefmt.freq,aget.format,aget.channels,aget.freq);
     fprintf(stderr,"%d\n",retval);
@@ -1074,7 +1273,7 @@ int main( int argc, char **argv )
 				isActive = TRUE;
 			    else
 				isActive = TRUE;
-			    break;			    
+			    break;
 			case SDL_VIDEORESIZE:
 			    surface = SDL_SetVideoMode( event.resize.w,
 							event.resize.h,
@@ -1101,7 +1300,7 @@ int main( int argc, char **argv )
 
 	    /* If rainbow coloring is turned on, cycle the colors */
 	    if ( rainbow && ( delay > 25 ) )
-		col = (++col ) % 12;
+		col = (col+1) % 12;
 
 	    if ( isActive ){
 	    	drawGLScene( );
@@ -1114,7 +1313,7 @@ int main( int argc, char **argv )
   fprintf(stderr,"Playback test done\n");
 
   SDL_CloseAudio();
-  
+
   if(audio_buf!=NULL) free(audio_buf);
 
 
