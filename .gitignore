@@ -1,7 +1,8 @@
 #Put here files that you don't want to track#
 ############################################
-/game/rendererold.cpp
-/game/renderernewold.cpp
+/game/rendererV1.cpp
+/game/rendererV2.cpp
+/game/rendererV3.cpp
 
 #System Files#
 ##############

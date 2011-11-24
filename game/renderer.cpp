@@ -79,7 +79,7 @@ float normal[] = {0.0f, 1.0f, 0.0f};
 
 /* Particle system definitions */
 int rainbow=FALSE;
-float slowdown = 1000.0f; /* Slow Down Particles                                */
+float slowdown = 5000.0f; /* Slow Down Particles                                */
 float xspeed;          /* Base X Speed (To Allow Keyboard Direction Of Tail) */
 float yspeed=200;          /* Base Y Speed (To Allow Keyboard Direction Of Tail) */
 float zoom = -10.0f;   /* Used To Zoom Out                                   */
@@ -289,6 +289,7 @@ int resizeWindow( int width, int height )
     scene3->initFrameBuffer();
     cubescreen = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
     cubescreen->initFrameBuffer();
+
 
 
     return( TRUE );
@@ -550,16 +551,13 @@ int initGL(void)
     shader2.init(vertex_shadercombine,fragment_shadercombine);
 
 
-    scene = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    scene = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene->initFrameBuffer();
-
     scene2 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene2->initFrameBuffer();
-
     scene3 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene3->initFrameBuffer();
-
-    cubescreen = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
+    cubescreen = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
     cubescreen->initFrameBuffer();
 
 
@@ -604,16 +602,16 @@ void drawParticles(float* pos){
 			    glBegin( GL_TRIANGLE_STRIP );
 			      /* Top Right */
 			      glTexCoord2d( 1, 1 );
-			      glVertex3f( x + 0.3f, y + 0.3f, z );
+			      glVertex3f( x + 0.2f, y + 0.2f, z );
 			      /* Top Left */
 			      glTexCoord2d( 0, 1 );
-			      glVertex3f( x - 0.3f, y + 0.3f, z );
+			      glVertex3f( x - 0.2f, y + 0.2f, z );
 			      /* Bottom Right */
 			      glTexCoord2d( 1, 0 );
-			      glVertex3f( x + 0.3f, y - 0.3f, z );
+			      glVertex3f( x + 0.2f, y - 0.2f, z );
 			      /* Bottom Left */
 			      glTexCoord2d( 0, 0 );
-			      glVertex3f( x - 0.3f, y - 0.3f, z );
+			      glVertex3f( x - 0.2f, y - 0.2f, z );
 			    glEnd( );
 
 			    /* Move On The X Axis By X Speed */
@@ -624,7 +622,7 @@ void drawParticles(float* pos){
 				( slowdown * 100  );
 			    /* Move On The Z Axis By Z Speed */
 			    particles[loop].z += particles[loop].zi /
-				( slowdown * 750 );
+				( slowdown * 75 );
 
 			    /* Take Pull On X Axis Into Account */
 			    particles[loop].xi += particles[loop].xg;
@@ -700,6 +698,9 @@ int drawGLScene( void )
     /* These are to calculate our fps */
     static GLint T0     = 0;
     static GLint Frames = 0;
+    int len;
+    location vertexData[12];
+
 
     float xpos = simCube->getCenterOfMassPosition().getX();
     float ypos = simCube->getCenterOfMassPosition().getY();
@@ -715,29 +716,99 @@ int drawGLScene( void )
 	eye[2] = zpos + eyec[2];
 
 	scene->bind();
+	 
 	glClearColor(0.0,0.0,0.0,1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+    glDisable(GL_DEPTH_TEST);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    /* Draw 1 into the stencil buffer. */
+    glEnable(GL_STENCIL_TEST);
+    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
 
-    /* Draw all the walls */
+    /* Now render floor; floor pixels just get their stencil set to 1. */
+    /* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
+	   Thus first check which cube and then draw only the top surface*/
+    int mycube=0;
     glColor3f(1.0, 1.0, 1.0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture[0]);
-    int len = (int) wallData.size();
-    location vertexData[12];
+    len = (int) wallData.size();
+    for(int j=0; j<len; j++){
+    /*I need to check which cube should render the reflecting surface*/
+    	if(xpos<=(wallData[j]).max.v[0] && xpos>=(wallData[j]).min.v[0])
+    	{
+    		if(zpos<=(wallData[j]).max.v[2]  && zpos>=(wallData[j]).min.v[2])
+    		{
+    			mycube=j;
+    			to_reflect=1;
+    			break;
+    		}
+		}
+	}
+       
+	float min[3], max[3];
+	min[0] = (wallData[mycube]).min.v[0];
+	min[1] = (wallData[mycube]).max.v[1];	
+	min[2] = (wallData[mycube]).min.v[2];
+	max[0] = (wallData[mycube]).max.v[0];
+	max[1] = (wallData[mycube]).max.v[1];
+	max[2] = (wallData[mycube]).max.v[2];
+	drawRect(min, max);
+    
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+
+    /* Now, only render where stencil is set to 1. */
+    glStencilFunc(GL_EQUAL, 1, 0xf);  /* draw if ==1 */
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+    glEnable(GL_NORMALIZE);
+
+    simCube->getMotionState()->getWorldTransform(trans);
+    trans.getOpenGLMatrix(matrix);
+    glTranslatef(0,2*wallData[mycube].max.v[1],0);
+    glScalef(1.0, -1.0, 1.0);
+    glMultMatrixf(matrix);
+   
+    if(to_reflect==1)
+     {
+    	 /* Drawing the reflected cube */
+    	 glBindTexture(GL_TEXTURE_2D, texture[2]);
+    	 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
+    	     		 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
+    	 newcubeData.generateRect(vertexData);
+    	 for(int i=0; i<6; i++){
+    		 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+    	 }
+     }
+
+     to_reflect=0;
+     /* Disable noramlize again and re-enable back face culling. */
+     glDisable(GL_NORMALIZE);
+     glDisable(GL_STENCIL_TEST);
+     glActiveTexture(GL_TEXTURE0);
+     glBindTexture(GL_TEXTURE_2D, texture[0]);
+     glLoadIdentity( );
+     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+     glEnable(GL_BLEND);
+     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+     glColor4f(1.0, 1.0, 1.0,0.2f);
+     drawRect(min, max);
+     glDisable(GL_BLEND);
+     len = (int) wallData.size();
      for(int j=0; j<len; j++){
     	 location vertexData[12];
     	 (wallData.at(j)).generateRect(vertexData);
     	 for(int i = 0; i < 6; i++){
+    		 //if (i!=4 || mycube!=j)
     			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
     	 }
      }
-
+     
      glLoadIdentity( );
      gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
     /* Drawing the moving cube */
-     glActiveTexture(GL_TEXTURE0);
      glBindTexture(GL_TEXTURE_2D, texture[2]);
      simCube->getMotionState()->getWorldTransform(trans);
      trans.getOpenGLMatrix(matrix);
@@ -750,8 +821,6 @@ int drawGLScene( void )
      }
 
      /* Draw flame to the screen */
-    glLoadIdentity();
-
     glEnable( GL_BLEND );
     /* Type Of Blending To Perform */
     glBlendFunc( GL_SRC_ALPHA, GL_ONE );
@@ -762,92 +831,11 @@ int drawGLScene( void )
     glDisable(GL_BLEND);
 
     /* Draw Black Holes */
-    glColor3f(1.0, 0.0, 0.0);
+    glColor3f(1.0f, 1.0f, 1.0f);
      len = holesData.size();
      for(int i=0; i<len; i++)
     	 drawHoles((holesData.at(i)).pos.v, (holesData.at(i)).radius);
-
     scene->unbind();
-
-    /* Draw reflected cube */
-    cubescreen->bind();
-    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-    glLoadIdentity( );
-    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-
-    glDisable(GL_DEPTH_TEST);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-     /* Draw 1 into the stencil buffer. */
-	glEnable(GL_STENCIL_TEST);
-	glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
-	glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
-
-	/* Now render floor; floor pixels just get their stencil set to 1. */
-	/* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
-	   Thus first check which cube and then draw only the top surface*/
-	int mycube=0;
-	glColor3f(1.0, 1.0, 1.0);
-	len = (int) wallData.size();
-	for(int j=0; j<len; j++){
-	/*I need to check which cube should render the reflecting surface*/
-		if(xpos<=(wallData[j]).max.v[0] && xpos>=(wallData[j]).min.v[0])
-		{
-			if(zpos<=(wallData[j]).max.v[2]&& zpos>=(wallData[j]).min.v[2])
-			{
-				mycube=j;
-				to_reflect=1;
-				break;
-			}
-		}
-	}
-
-	float min[3], max[3];
-	min[0] = (wallData[mycube]).min.v[0];
-	min[1] = (wallData[mycube]).max.v[1];
-	min[2] = (wallData[mycube]).min.v[2];
-	max[0] = (wallData[mycube]).max.v[0];
-	max[1] = (wallData[mycube]).max.v[1];
-	max[2] = (wallData[mycube]).max.v[2];
-	drawRect(min, max);
-
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-	glEnable(GL_DEPTH_TEST);
-
-	/* Now, only render where stencil is set to 1. */
-	glStencilFunc(GL_EQUAL, 1, 0xffffffff);  /* draw if ==1 */
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-	//glEnable(GL_CULL_FACE);
-	glEnable(GL_NORMALIZE);
-	// glCullFace(GL_FRONT);
-
-	simCube->getMotionState()->getWorldTransform(trans);
-	trans.getOpenGLMatrix(matrix);
-	glTranslatef(0,2*wallData[mycube].max.v[1],0);
-	glScalef(1.0, -1.0, 1.0);
-	glMultMatrixf(matrix);
-	glColor3f(1.0,0.0,0.0);
-	if(to_reflect==1)
-	 {
-		 /* Drawing the reflected cube */
-		 glBindTexture(GL_TEXTURE_2D, texture[2]);
-		 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
-					 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
-		 newcubeData.generateRect(vertexData);
-		 for(int i=0; i<6; i++){
-			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-		 }
-	 }
-
-	 to_reflect=0;
-	 /* Disable noramlize again and re-enable back face culling. */
-	 glDisable(GL_NORMALIZE);
-	 //glCullFace(GL_BACK);
-	 //glDisable(GL_CULL_FACE);
-	 glDisable(GL_STENCIL_TEST);
-
-    cubescreen->unbind();
-
     /* Horizontal Blur */
     scene2->bind();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -857,7 +845,7 @@ int drawGLScene( void )
     GLuint tex_location = glGetUniformLocation(shader.id(), "tex0");
     glUniform1i(tex_location, 0);
     GLuint offset_location = glGetUniformLocation(shader.id(), "sampleOffset");
-    glUniform2f(offset_location, 2.0/(float) SCREEN_WIDTH, 0.0);
+    glUniform2f(offset_location, 1.5/(float) SCREEN_WIDTH, 0.0);
 
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -898,10 +886,7 @@ int drawGLScene( void )
     glActiveTexture(GL_TEXTURE0);
     scene->textureBind();
     shader.bind();
-    tex_location = glGetUniformLocation(shader.id(), "tex0");
-    glUniform1i(tex_location, 0);
-    offset_location = glGetUniformLocation(shader.id(), "sampleOffset");
-    glUniform2f(offset_location, 0.0, 2.0/(float) SCREEN_WIDTH);
+    glUniform2f(offset_location, 0.0, 1.5/(float) SCREEN_HEIGHT);
 
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -943,8 +928,10 @@ int drawGLScene( void )
 
 
     glActiveTexture(GL_TEXTURE0);
+
+    /* Draw the main scene */
     scene->textureBind();
-    shader2.bind();
+    glGenerateMipmap(scene->getTextureID());
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -971,9 +958,12 @@ int drawGLScene( void )
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
+	/* End */
 
+	/* Draw the horizontally blurred scene */
 	glActiveTexture(GL_TEXTURE0);
 	scene2->textureBind();
+	glGenerateMipmap(scene2->getTextureID());
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
@@ -1000,15 +990,12 @@ int drawGLScene( void )
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
+    /* End */
 
-	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix();
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-
+    /* Draw vertically blurred scene */
 	glActiveTexture(GL_TEXTURE0);
 	scene3->textureBind();
+	glGenerateMipmap(scene3->getTextureID());
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
@@ -1029,46 +1016,16 @@ int drawGLScene( void )
 	glVertex2f(1.0f, -1.0f); // The bottom right corner
 
 	glEnd();
-
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-
-
-    glActiveTexture(GL_TEXTURE0);
-	cubescreen->textureBind();
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
 	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	/* End */
+	glDisable(GL_BLEND);
 
-	glBegin(GL_QUADS);
-	glTexCoord2f(0.0f, 0.0f);
-	glVertex2f(-1.0,-1.0); // The bottom left corner
 
-	glTexCoord2f(0.0f, 1.0f);
-	glVertex2f(-1.0f, 1.0f); // The top left corner
-
-	glTexCoord2f(1.0f, 1.0f);
-	glVertex2f(1.0f, 1.0f); // The top right corner
-
-	glTexCoord2f(1.0f, 0.0f);
-	glVertex2f(1.0f, -1.0f); // The bottom right corner
-
-	glEnd();
-
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-
-    glDisable(GL_BLEND);
-    shader2.unbind();
-    SDL_GL_SwapBuffers( );
+	SDL_GL_SwapBuffers( );
 
     /* Gather our frames per second */
     Frames++;
