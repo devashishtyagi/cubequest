@@ -13,7 +13,7 @@
 <wall min = "3 -11 -168" max = "15 11 -148"></wall>
 </surface>
 <obstacles>
-<obstacle min = "-10 0 -10" max = "0 10 0" end = "0 9 0" d = "0.003"></obstacle>
+<obstacle min = "-4 -14 -130" max = "4 -11 -120" end = "10 0 0" d = "5.0"></obstacle>
 </obstacles>
 <blackholes>
 <hole pos="0 -11 -130" radius = "9.0"></hole>
