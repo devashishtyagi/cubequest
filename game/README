@@ -1,0 +1,10 @@
+Build the executables using make.
+Run the game using make run.
+
+Controls:
+up - move forward
+down - move backward
+left - move left
+right - move right
+
+use mouse pad to change the direction of viewing.

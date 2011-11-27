@@ -24,10 +24,11 @@ public:
 
 class obstacle{
 public:
-	location min, max, end, curr_min, curr_max;
-	float d, dir;
+	location min, max, curr_min, curr_max;
+	float vel[3];
+	float t, curr_time;
 	obstacle(location, location, location, float);
-	void move();
+	void check(float);
 	void generateRect(location*);
 };
 
@@ -109,14 +110,16 @@ void wall::generateRect(location* vertexData){
 	}
 }
 
-obstacle::obstacle(location a, location b, location c, float mv){
+obstacle::obstacle(location a, location b, location c, float duration){
 	min.assign(a);
 	max.assign(b);
-	end.assign(c);
 	curr_min.assign(a);
 	curr_max.assign(b);
-	d = mv;
-	dir = 1;
+	vel[0] = c.v[0]/duration;
+	vel[1] = c.v[1]/duration;
+	vel[2] = c.v[2]/duration;
+	t = duration;
+	curr_time = 0.0f;
 }
 
 void obstacle::generateRect(location* vertexData){
@@ -146,17 +149,17 @@ void obstacle::generateRect(location* vertexData){
 	}
 }
 
-void obstacle::move(){
+void obstacle::check(float dtime){
 	for(int i=0; i<3; i++){
-		curr_min.v[i] = curr_min.v[i] + (end.v[i] - curr_min.v[i] + min.v[i])*d*dir;
+		curr_min.v[i] += vel[i]*dtime;
+		curr_max.v[i] += vel[i]*dtime;
 	}
-
-	if (!(curr_min.isLess(min.add(end))) && (dir>0)){
-		dir = -dir;
-	}
-
-	if (!(min.isLess(curr_min)) && (dir < 0)){
-		dir = -dir;
+	curr_time += dtime;
+	if (curr_time > t){
+		vel[0] = -vel[0];
+		vel[1] = -vel[1];
+		vel[2] = -vel[2];
+		curr_time = 0.0f;
 	}
 }
 

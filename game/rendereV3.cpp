@@ -25,7 +25,7 @@ using namespace std;
 /* screen dimensions */
 int SCREEN_WIDTH  = 600;
 int SCREEN_HEIGHT = 600;
-int SCREEN_BPP = 32;
+int SCREEN_BPP = 16;
 
 
 Uint8 *audio_buf=NULL;
@@ -34,14 +34,14 @@ Uint32 wav_bytes=0;
 fbo *scene;
 fbo *scene2;
 fbo *scene3;
-fbo *scene4;
+fbo *cubescreen;
 
 /* playfield sml */
 char filename[] = "data/playfield.xml";
 char vertex_shader[] = "shaders/bloom1.vs";
 char fragment_shader[] = "shaders/bloom2.fs";
-char fragment_shader_msaa[] = "shaders/hdr_msaa.fs";
-char vertex_shader_msaa[] = "shaders/hdr_msaa.vs";
+char fragment_shadercombine[] = "shaders/fxaa.fs";
+char vertex_shadercombine[] = "shaders/fxaa.vs";
 
 
 /* playfield data */
@@ -51,7 +51,7 @@ vector<holes> holesData;
 vector<location> flameData, powerData;
 
 /* cube drawing data */
-wall cubeData(location(-0.5, 1.0, -2.0), location(0.5, 2.0, -1.0));
+wall cubeData(location(-1.0, 2.0, -2.0), location(1.0, 4.0, 0.0));
 
 /* Simulation data */
 static float simTime = 0.0;
@@ -59,7 +59,6 @@ static btScalar matrix[16];
 static btTransform trans;
 static btDiscreteDynamicsWorld *dynamicsWorld;
 static vector<btRigidBody*> simWall;
-static vector<btRigidBody*> simObs;
 static btRigidBody *simCube;
 
 /* Surface about which reflection is to occur */
@@ -73,7 +72,7 @@ GLfloat lightOneColor[] = {1.0, 0.0, 0.0, 1.0}; /* red-tinted */
 
 
 /* variables specifying the camera attributes */
-float eyec[] = {0.0f, 5.0f, 5.0f};
+float eyec[] = {2.0f, 5.0f, 10.0f};
 float eye[] = {2.0f, 5.0f, 10.0f};
 float object[] = {0.0f, 0.0f, 0.0f};
 float normal[] = {0.0f, 1.0f, 0.0f};
@@ -138,21 +137,13 @@ particle particles[MAX_PARTICLES];
 /* This is our SDL surface */
 SDL_Surface *surface;
 char filelocation[] = "data/plate.bmp";
-char cubefilename[] = "data/cube3.bmp";
+char cubefilename[] = "data/cube.bmp";
 
 /* Storage For One Texture ( NEW ) */
 GLuint texture[3];
 
 /* Music functionality */
 int running;
-
-/* Update the positions of Obstacles */
-void updateObsPostion(float dtime){
-	int len = obsData.size();
-	for(int i=0; i<len; i++){
-		obsData.at(i).check(dtime);
-	}
-}
 
 /* Cleaning up simulation */
 void SimQuit(){
@@ -209,8 +200,8 @@ int LoadGLTextures( )
 			  TextureImage[0]->h, GL_BGR,
 			  GL_UNSIGNED_BYTE, TextureImage[0]->pixels );
 
-	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         }
 
@@ -284,22 +275,24 @@ int resizeWindow( int width, int height )
     glMatrixMode( GL_PROJECTION );
     glLoadIdentity( );
 
-    gluPerspective( 60.0f, ratio, 1.0f, 1000.0f );
+    gluPerspective( 60.0f, ratio, 1.0f, 100.0f );
 
     glMatrixMode( GL_MODELVIEW );
 
     glLoadIdentity( );
 
-    scene = new fbo(2*SCREEN_WIDTH,2*SCREEN_HEIGHT);
+    scene = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene->initFrameBuffer();
-    scene2 = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    scene2 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene2->initFrameBuffer();
-    scene3 = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    scene3 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene3->initFrameBuffer();
-    scene4 = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
-    scene4->initFrameBuffer();
+    cubescreen = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    cubescreen->initFrameBuffer();
 
-    return(TRUE);
+
+
+    return( TRUE );
 }
 
 
@@ -356,27 +349,6 @@ float mod(float a)
 void handleKeyPress( SDL_keysym *keysym )
 {
 	btVector3 velocity(0.0,0.0,0.0);
-    float xpos = simCube->getCenterOfMassPosition().getX();
-    float zpos = simCube->getCenterOfMassPosition().getZ();
-
-    float xdir = xpos - eye[0];
-    float zdir = zpos - eye[2];
-
-    float magnitude = sqrt(xdir*xdir + zdir*zdir);
-
-    xdir = xdir/magnitude;
-    zdir = zdir/magnitude;
-
-    float pxdir,pzdir;
-    if (zdir>xdir){
-    	pxdir = zdir;
-    	pzdir = -xdir;
-    }
-    else{
-    	pxdir = -zdir;
-    	pzdir = xdir;
-    }
-
 	switch( (keysym->sym) ){
 		case SDLK_ESCAPE:
 			Quit(0);
@@ -416,27 +388,23 @@ void handleKeyPress( SDL_keysym *keysym )
 		case SDLK_LEFT:
 			velocity = simCube->getLinearVelocity();
 			if (velocity.length() < 8.0)
-				simCube->applyCentralForce(btVector3(-6.0*pxdir,0, -6.0*pzdir));
+				simCube->applyCentralForce(btVector3(-10.0,0,0));
 			break;
 	    case SDLK_RIGHT:
 			velocity = simCube->getLinearVelocity();
-			if (velocity.length() < 10.0)
-				simCube->applyCentralForce(btVector3(6.0*pxdir,0, 6.0*pzdir));
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(10.0,0,0));
 			break;
 	    case SDLK_UP:
 			velocity = simCube->getLinearVelocity();
-			if (velocity.length() < 10.0)
-				simCube->applyCentralForce(btVector3(6.0*xdir,0,6.0*zdir));
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(0,0,-10.0));
 			break;
 	    case SDLK_DOWN:
 			velocity = simCube->getLinearVelocity();
-			if (velocity.length() < 10.0)
-				simCube->applyCentralForce(btVector3(-6.0*xdir,0,-6.0*zdir));
+			if (velocity.length() < 8.0)
+				simCube->applyCentralForce(btVector3(0,0,10.0));
 			break;
-	    case SDLK_SPACE:
-	    	if (!(simCube->getLinearVelocity().getY() > 0.2 || simCube->getLinearVelocity().getY() < -0.2))
-	    		simCube->setLinearVelocity(btVector3(simCube->getLinearVelocity().getX(), (btScalar) 10.0,simCube->getLinearVelocity().getZ()));
-	    	break;
 		default:
 	       break;
 	  }
@@ -447,26 +415,6 @@ void handleKeyPress( SDL_keysym *keysym )
 /* handling mouse event */
 
 void mouseMovement(int x,int y,int z) {
-	static double xprev=0.0, yprev=0.0, zprev=1.0;
-	double xnew = (double) x;
-	double ynew = (double) y;
-	double znew;
-	xnew = xnew/((double) SCREEN_WIDTH/2) - 1.0;
-	ynew = 1.0 - ynew/((double) SCREEN_HEIGHT/2);
-	double zb = 1.0-xnew*xnew-ynew*ynew;
-	if (zb>0)
-		znew = sqrt(zb);
-	else
-		znew = 0.0;
-
-	double radius = sqrt(eyec[0]*eyec[0]+eyec[1]*eyec[1]+eyec[2]*eyec[2]);
-	eyec[0] = radius*xnew;
-	//eyec[1] = radius*ynew;
-	eyec[2] = radius*znew;
-
-	xprev = xnew;
-	yprev = ynew;
-	zprev = znew;
 }
 
 
@@ -506,7 +454,7 @@ int initSim(void){
 	simCube->setActivationState(DISABLE_DEACTIVATION);
 	dynamicsWorld->addRigidBody(simCube);
 
-	/* simulating the playfield */
+	/* simulating the rest of the environment */
 	int len = (int) wallData.size();
 	for(int i=0; i<len; i++){
 		shape = new btBoxShape(btVector3((wallData.at(i).max.v[0] - wallData.at(i).min.v[0])/2,(wallData.at(i).max.v[1] - wallData.at(i).min.v[1])/2,(wallData.at(i).max.v[2] - wallData.at(i).min.v[2])/2));
@@ -519,23 +467,6 @@ int initSim(void){
 		boxRigidBodyCI->m_friction = 0.1;
 		simWall.push_back(new btRigidBody(*boxRigidBodyCI));
 		dynamicsWorld->addRigidBody(simWall.at(i));
-	}
-
-	/* simulating the obstacles */
-	len = (int) obsData.size();
-	for(int i=0; i<len; i++){
-		shape = new btBoxShape(btVector3((obsData.at(i).max.v[0] - obsData.at(i).min.v[0])/2,(obsData.at(i).max.v[1] - obsData.at(i).min.v[1])/2,(obsData.at(i).max.v[2] - obsData.at(i).min.v[2])/2));
-		trans.setIdentity();
-		qtn.setEuler(0, 0.0, 0.0);
-		trans.setRotation(qtn);
-		trans.setOrigin(btVector3((obsData.at(i).max.v[0] + obsData.at(i).min.v[0])/2,(obsData.at(i).max.v[1] + obsData.at(i).min.v[1])/2,(obsData.at(i).max.v[2] + obsData.at(i).min.v[2])/2));
-		motionState = new btDefaultMotionState(trans);
-		boxRigidBodyCI = new btRigidBody::btRigidBodyConstructionInfo(btScalar(0.0), motionState, shape, btVector3(0,0,0));
-		boxRigidBodyCI->m_friction = 0.1;
-		simObs.push_back(new btRigidBody(*boxRigidBodyCI));
-		simObs.at(i)->setCollisionFlags( simObs.at(i)->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
-		simObs.at(i)->setActivationState(DISABLE_DEACTIVATION);
-		dynamicsWorld->addRigidBody(simObs.at(i));
 	}
 
 	return 1;
@@ -563,19 +494,13 @@ int initGL(void)
 	glClearColor(0.0f, 0.0f, 0.0f ,1.0f);
     glEnable( GL_TEXTURE_2D );
     glShadeModel( GL_SMOOTH );
-
-    glEnable(GL_MULTISAMPLE);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST );
-    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST );
-    glEnable(GL_LINE_SMOOTH);
-    glEnable(GL_POLYGON_SMOOTH);
-
     glClearColor( 0.0f, 0.0f, 0.0f, 0.5f );
     glClearDepth( 1.0f );
   // glEnable(GL_LIGHTING);
     glEnable( GL_DEPTH_TEST );
     glDepthFunc( GL_LEQUAL );
     glHint( GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST );
+
     /* Enable Blending */
     glHint( GL_POINT_SMOOTH_HINT, GL_NICEST );
     /* Enable Texture Mapping */
@@ -623,17 +548,17 @@ int initGL(void)
     glLightfv(GL_LIGHT1, GL_POSITION, lightOnePosition);
 
     shader.init(vertex_shader,fragment_shader);
-    shader2.init(vertex_shader_msaa,fragment_shader_msaa);
+    shader2.init(vertex_shadercombine,fragment_shadercombine);
 
 
-    scene = new fbo(2*SCREEN_WIDTH,2*SCREEN_HEIGHT);
+    scene = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene->initFrameBuffer();
-    scene2 = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    scene2 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene2->initFrameBuffer();
-    scene3 = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    scene3 = new fbo(SCREEN_WIDTH, SCREEN_HEIGHT);
     scene3->initFrameBuffer();
-    scene4 = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
-    scene4->initFrameBuffer();
+    cubescreen = new fbo(SCREEN_WIDTH,SCREEN_HEIGHT);
+    cubescreen->initFrameBuffer();
 
 
     return( TRUE );
@@ -642,7 +567,6 @@ int initGL(void)
 void drawHoles(float* pos, float radius){
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-    glColor3f(1.0f,0.0f,0.0f);
     glTranslatef(pos[0], pos[1], pos[2]);
     glutWireSphere(radius, 8, 8);
 }
@@ -698,7 +622,7 @@ void drawParticles(float* pos){
 				( slowdown * 100  );
 			    /* Move On The Z Axis By Z Speed */
 			    particles[loop].z += particles[loop].zi /
-				( slowdown * 75 );
+				( slowdown * 750 );
 
 			    /* Take Pull On X Axis Into Account */
 			    particles[loop].xi += particles[loop].xg;
@@ -728,40 +652,40 @@ void drawParticles(float* pos){
 
 void drawRect(float* min, float* max){
 	if (min[0] == max[0]){
-		float x = min[0], y, z;
+		int x = min[0], y, z;
 		for(y = min[1]; y < max[1]; y++){
 			for(z = min[2]; z< max[2]; z++){
 				glBegin(GL_QUADS);
 					glTexCoord2f(0.0f, 1.0f); glVertex3f(x, y, z);
-					glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y+1.0, z);
-					glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y+1.0, z+1.0);
-					glTexCoord2f(0.0f, 0.0f); glVertex3f(x, y, z+1.0);
+					glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y+1, z);
+					glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y+1, z+1);
+					glTexCoord2f(0.0f, 0.0f); glVertex3f(x, y, z+1);
 				glEnd();
 			}
 		}
 	}
 	else if(min[1] == max[1]){
-		float y = min[1], x, z;
+		int y = min[1], x, z;
 		for(x = min[0]; x < max[0]; x++){
 			for(z = min[2]; z < max[2]; z++){
 				glBegin(GL_QUADS);
 					glTexCoord2f(0.0f, 1.0f); glVertex3f(x, y, z);
-					glTexCoord2f(1.0f, 1.0f); glVertex3f(x+1.0, y, z);
-					glTexCoord2f(1.0f, 0.0f); glVertex3f(x+1.0, y, z+1);
-					glTexCoord2f(0.0f, 0.0f); glVertex3f(x, y, z+1.0);
+					glTexCoord2f(1.0f, 1.0f); glVertex3f(x+1, y, z);
+					glTexCoord2f(1.0f, 0.0f); glVertex3f(x+1, y, z+1);
+					glTexCoord2f(0.0f, 0.0f); glVertex3f(x, y, z+1);
 				glEnd();
 			}
 		}
 	}
 	else{
-		float z = min[2], y, x;
+		int z = min[2], y, x;
 		for(x = min[0]; x < max[0]; x++){
 			for(y = min[1]; y < max[1]; y++){
 				glBegin(GL_QUADS);
 					glTexCoord2f(0.0f, 1.0f); glVertex3f(x, y, z);
-					glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y+1.0, z);
-					glTexCoord2f(1.0f, 0.0f); glVertex3f(x+1.0, y+1.0, z);
-					glTexCoord2f(0.0f, 0.0f); glVertex3f(x+1.0, y, z);
+					glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y+1, z);
+					glTexCoord2f(1.0f, 0.0f); glVertex3f(x+1, y+1, z);
+					glTexCoord2f(0.0f, 0.0f); glVertex3f(x+1, y, z);
 				glEnd();
 			}
 		}
@@ -772,21 +696,16 @@ void drawRect(float* min, float* max){
 int drawGLScene( void )
 {
     /* These are to calculate our fps */
-    static GLint T0,T1     = 0;
+    static GLint T0     = 0;
     static GLint Frames = 0;
     int len;
     location vertexData[12];
 
-    /* Supply Blur factor */
-    static float blur_factor = 1.5;
-    static float change = 1.0;
 
     float xpos = simCube->getCenterOfMassPosition().getX();
     float ypos = simCube->getCenterOfMassPosition().getY();
     float zpos = simCube->getCenterOfMassPosition().getZ();
 
-    if (ypos < -40.0)
-    	Quit(0);
 
 	object[0] = xpos;
 	object[1] = ypos;
@@ -797,101 +716,32 @@ int drawGLScene( void )
 	eye[2] = zpos + eyec[2];
 
 	scene->bind();
+	/*shader2.bind();
+	int width_loc = glGetUniformLocation(shader2.id(), "rt_w");
+	glUniform1f(width_loc, 0.5);
+	int height_loc = glGetUniformLocation(shader2.id(), "rt_h");
+	glUniform1f(height_loc, 0.5);*/
 	glClearColor(0.0,0.0,0.0,1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glPushMatrix();
     glLoadIdentity( );
     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-    glViewport(0,0, 2*SCREEN_WIDTH, 2*SCREEN_HEIGHT);
-
-    glDisable(GL_DEPTH_TEST);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    /* Draw 1 into the stencil buffer. */
-    glEnable(GL_STENCIL_TEST);
-    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
-    glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
-
-    /* Now render floor; floor pixels just get their stencil set to 1. */
-    /* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
-	   Thus first check which cube and then draw only the top surface*/
-    int mycube=0;
+    /* Draw all the walls */
     glColor3f(1.0, 1.0, 1.0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture[0]);
     len = (int) wallData.size();
-    for(int j=0; j<len; j++){
-    /*I need to check which cube should render the reflecting surface*/
-    	if(xpos<=(wallData[j]).max.v[0] && xpos>=(wallData[j]).min.v[0])
-    	{
-    		if(zpos<=(wallData[j]).max.v[2]  && zpos>=(wallData[j]).min.v[2])
-    		{
-    			mycube=j;
-    			to_reflect=1;
-    			break;
-    		}
-		}
-	}
-       
-	float min[3], max[3];
-	min[0] = (wallData[mycube]).min.v[0];
-	min[1] = (wallData[mycube]).max.v[1];	
-	min[2] = (wallData[mycube]).min.v[2];
-	max[0] = (wallData[mycube]).max.v[0];
-	max[1] = (wallData[mycube]).max.v[1];
-	max[2] = (wallData[mycube]).max.v[2];
-	drawRect(min, max);
-    
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-
-    /* Now, only render where stencil is set to 1. */
-    glStencilFunc(GL_EQUAL, 1, 0xf);  /* draw if ==1 */
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-    glEnable(GL_NORMALIZE);
-
-    simCube->getMotionState()->getWorldTransform(trans);
-    trans.getOpenGLMatrix(matrix);
-    glTranslatef(0,2*wallData[mycube].max.v[1],0);
-    glScalef(1.0, -1.0, 1.0);
-    glMultMatrixf(matrix);
-   
-    if(to_reflect==1)
-     {
-    	 /* Drawing the reflected cube */
-    	 glBindTexture(GL_TEXTURE_2D, texture[2]);
-    	 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
-    	     		 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
-    	 newcubeData.generateRect(vertexData);
-    	 for(int i=0; i<6; i++){
-    		 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-    	 }
-     }
-
-     to_reflect=0;
-     /* Disable noramlize again and re-enable back face culling. */
-     glDisable(GL_NORMALIZE);
-     glDisable(GL_STENCIL_TEST);
-     glActiveTexture(GL_TEXTURE0);
-     glBindTexture(GL_TEXTURE_2D, texture[0]);
-     glLoadIdentity( );
-     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-     glEnable(GL_BLEND);
-     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-     glColor4f(1.0, 1.0, 1.0,0.8f);
-     drawRect(min, max);
-     glDisable(GL_BLEND);
-     len = (int) wallData.size();
      for(int j=0; j<len; j++){
     	 location vertexData[12];
     	 (wallData.at(j)).generateRect(vertexData);
     	 for(int i = 0; i < 6; i++){
-    		 if (i!=4 || mycube!=j)
     			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
     	 }
      }
-     
+
      glLoadIdentity( );
      gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
     /* Drawing the moving cube */
+     glActiveTexture(GL_TEXTURE0);
      glBindTexture(GL_TEXTURE_2D, texture[2]);
      simCube->getMotionState()->getWorldTransform(trans);
      trans.getOpenGLMatrix(matrix);
@@ -903,34 +753,9 @@ int drawGLScene( void )
     	 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
      }
 
-     /* Draw the obstacles */
-     glLoadIdentity( );
-     gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
-     glBindTexture(GL_TEXTURE_2D, texture[0]);
-     glColor3f(1.0f,1.0f,1.0f);
-     len = (int) obsData.size();
-     for(int i=0; i<len; i++){
-    	 trans = simObs.at(i)->getWorldTransform();
-    	 trans.setOrigin(btVector3((obsData.at(i).curr_min.v[0]+obsData.at(i).curr_max.v[0])/2,(obsData.at(i).curr_min.v[1]+obsData.at(i).curr_max.v[1])/2,(obsData.at(i).curr_min.v[2]+obsData.at(i).curr_max.v[2])/2));
-    	 simObs.at(i)->setWorldTransform(trans);
-    	 simObs.at(i)->getMotionState()->getWorldTransform(trans);
-    	 trans.setOrigin(btVector3((obsData.at(i).curr_min.v[0]+obsData.at(i).curr_max.v[0])/2,(obsData.at(i).curr_min.v[1]+obsData.at(i).curr_max.v[1])/2,(obsData.at(i).curr_min.v[2]+obsData.at(i).curr_max.v[2])/2));
-    	 simObs.at(i)->getMotionState()->setWorldTransform(trans);
-    	 location vertexData[12];
-    	 (obsData.at(i)).generateRect(vertexData);
-    	 for(int i = 0; i < 6; i++){
-    			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
-    	 }
-     }
-
-     /* Draw Black Holes */
-     glColor3f(1.0f, 1.0f, 1.0f);
-     len = holesData.size();
-     for(int i=0; i<len; i++)
-     	 drawHoles((holesData.at(i)).pos.v, (holesData.at(i)).radius);
-     glColor3f(1.0f,1.0f,1.0f);
-
      /* Draw flame to the screen */
+    glLoadIdentity();
+
     glEnable( GL_BLEND );
     /* Type Of Blending To Perform */
     glBlendFunc( GL_SRC_ALPHA, GL_ONE );
@@ -939,11 +764,92 @@ int drawGLScene( void )
     for(int i=0; i<len; i++)
 		drawParticles((flameData.at(i)).v);
     glDisable(GL_BLEND);
-    glColor3f(1.0f,1.0f,1.0f);
 
-    glPopMatrix();
+    /* Draw Black Holes */
+    glColor3f(1.0, 0.0, 0.0);
+     len = holesData.size();
+     for(int i=0; i<len; i++)
+    	 drawHoles((holesData.at(i)).pos.v, (holesData.at(i)).radius);
+    //shader2.unbind();
     scene->unbind();
 
+    cubescreen->bind();
+    /* Draw the reflected cube */
+	glClearColor(0.0,0.0,0.0,1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity( );
+    gluLookAt(eye[0], eye[1], eye[2], object[0], object[1], object[2], normal[0], normal[1], normal[2]);
+        glDisable(GL_DEPTH_TEST);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+             /* Draw 1 into the stencil buffer. */
+        	glEnable(GL_STENCIL_TEST);
+        	glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+        	glStencilFunc(GL_ALWAYS, 1, 0xffffffff);
+
+        	/* Now render floor; floor pixels just get their stencil set to 1. */
+        	/* Here I need to render the top of the floor only where the stencil buffer values would be set to 1
+        	   Thus first check which cube and then draw only the top surface*/
+        	int mycube=0;
+        	glColor3f(1.0, 1.0, 1.0);
+        	len = (int) wallData.size();
+        	for(int j=0; j<len; j++){
+        	/*I need to check which cube should render the reflecting surface*/
+        		if(xpos<=(wallData[j]).max.v[0] && xpos>=(wallData[j]).min.v[0])
+        		{
+        			if(zpos<=(wallData[j]).max.v[2]&& zpos>=(wallData[j]).min.v[2])
+        			{
+        				mycube=j;
+        				to_reflect=1;
+        				break;
+        			}
+        		}
+        	}
+
+        	float min[3], max[3];
+        	min[0] = (wallData[mycube]).min.v[0];
+        	min[1] = (wallData[mycube]).max.v[1];
+        	min[2] = (wallData[mycube]).min.v[2];
+        	max[0] = (wallData[mycube]).max.v[0];
+        	max[1] = (wallData[mycube]).max.v[1];
+        	max[2] = (wallData[mycube]).max.v[2];
+        	drawRect(min, max);
+
+        	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        	glEnable(GL_DEPTH_TEST);
+
+        	/* Now, only render where stencil is set to 1. */
+        	glStencilFunc(GL_EQUAL, 1, 0xffffffff);  /* draw if ==1 */
+        	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+        	//glEnable(GL_CULL_FACE);
+        	glEnable(GL_NORMALIZE);
+        	// glCullFace(GL_FRONT);
+
+        	simCube->getMotionState()->getWorldTransform(trans);
+        	trans.getOpenGLMatrix(matrix);
+        	glTranslatef(0,2*wallData[mycube].max.v[1],0);
+        	glScalef(1.0, -1.0, 1.0);
+        	glMultMatrixf(matrix);
+        	glColor3f(1.0,1.0,1.0);
+        	if(to_reflect==1)
+        	 {
+        		 /* Drawing the reflected cube */
+        		 glBindTexture(GL_TEXTURE_2D, texture[2]);
+        		 wall newcubeData(location((cubeData.min.v[0]-cubeData.max.v[0])/2,(cubeData.min.v[1]-cubeData.max.v[1])/2,(cubeData.min.v[2]-cubeData.max.v[2])/2),
+        					 location((-cubeData.min.v[0]+cubeData.max.v[0])/2,(-cubeData.min.v[1]+cubeData.max.v[1])/2,(-cubeData.min.v[2]+cubeData.max.v[2])/2));
+        		 newcubeData.generateRect(vertexData);
+        		 for(int i=0; i<6; i++){
+        			 drawRect((vertexData[2*i]).v, (vertexData[2*i+1]).v);
+        		 }
+        	 }
+
+        	 to_reflect=0;
+        	 /* Disable noramlize again and re-enable back face culling. */
+        	 glDisable(GL_NORMALIZE);
+        	 //glCullFace(GL_BACK);
+        	 //glDisable(GL_CULL_FACE);
+        	 glDisable(GL_STENCIL_TEST);
+    cubescreen->unbind();
 
     /* Horizontal Blur */
     scene2->bind();
@@ -954,15 +860,15 @@ int drawGLScene( void )
     GLuint tex_location = glGetUniformLocation(shader.id(), "tex0");
     glUniform1i(tex_location, 0);
     GLuint offset_location = glGetUniformLocation(shader.id(), "sampleOffset");
-    glUniform2f(offset_location, blur_factor/(float) SCREEN_WIDTH, 0.0);
+    glUniform2f(offset_location, 2.0/(float) SCREEN_WIDTH, 0.0);
 
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    glViewport(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
     glBegin(GL_QUADS);
     glTexCoord2f(0.0f, 0.0f);
     glVertex2f(-1.0,-1.0); // The bottom left corner
@@ -993,17 +899,17 @@ int drawGLScene( void )
     scene3->bind();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glActiveTexture(GL_TEXTURE0);
-    scene2->textureBind();
+    scene->textureBind();
     shader.bind();
-    glUniform2f(offset_location, 0.0, blur_factor/(float) SCREEN_HEIGHT);
+    glUniform2f(offset_location, 0.0, 2.0/(float) SCREEN_WIDTH);
 
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    glViewport(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
     glBegin(GL_QUADS);
     glTexCoord2f(0.0f, 0.0f);
     glVertex2f(-1.0,-1.0); // The bottom left corner
@@ -1024,27 +930,23 @@ int drawGLScene( void )
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
+
     shader.unbind();
-    scene2->textureUnbind();
+    scene->textureUnbind();
     glDisable(GL_TEXTURE0);
     scene3->unbind();
 
-    /* Blending all the scene and drawing them the main scene */
-    scene4->bind();
-    shader2.bind();
+    /* Blur and render FBO2 */
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_BLEND);
     glBlendFunc( GL_SRC_ALPHA, GL_ONE );
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
     glActiveTexture(GL_TEXTURE0);
 
+    /* Draw the main scene */
     scene->textureBind();
-    /*shader2.bind();
-    tex_location = glGetUniformLocation(shader.id(), "tex0");
-    glUniform1i(tex_location, 0);
-    offset_location = glGetUniformLocation(shader.id(), "sampleOffset");
-    glUniform2f(offset_location, 2.0/(float) SCREEN_WIDTH, 0.0);*/
-    glViewport(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
-
+    glGenerateMipmap(scene->getTextureID());
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -1071,12 +973,12 @@ int drawGLScene( void )
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
-	scene->textureUnbind();
 	/* End */
 
 	/* Draw the horizontally blurred scene */
 	glActiveTexture(GL_TEXTURE0);
 	scene2->textureBind();
+	glGenerateMipmap(scene2->getTextureID());
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
@@ -1095,6 +997,7 @@ int drawGLScene( void )
 
 	glTexCoord2f(1.0f, 0.0f);
 	glVertex2f(1.0f, -1.0f); // The bottom right corner
+
 	glEnd();
 
     glMatrixMode(GL_MODELVIEW);
@@ -1102,12 +1005,12 @@ int drawGLScene( void )
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
-    scene2->textureUnbind();
     /* End */
 
     /* Draw vertically blurred scene */
-    glActiveTexture(GL_TEXTURE0);
+	glActiveTexture(GL_TEXTURE0);
 	scene3->textureBind();
+	glGenerateMipmap(scene3->getTextureID());
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
@@ -1133,46 +1036,9 @@ int drawGLScene( void )
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
+	/* End */
 	glDisable(GL_BLEND);
-	scene3->textureUnbind();
-    /* End */
-	shader2.unbind();
-	scene4->unbind();
 
-
-
-	/*now draw scene 4*/
-	glActiveTexture(GL_TEXTURE0);
-		scene4->textureBind();
-
-		glViewport(0,0,SCREEN_WIDTH,SCREEN_HEIGHT);
-
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex2f(-1.0,-1.0); // The bottom left corner
-
-		glTexCoord2f(0.0f, 1.0f);
-		glVertex2f(-1.0f, 1.0f); // The top left corner
-
-		glTexCoord2f(1.0f, 1.0f);
-		glVertex2f(1.0f, 1.0f); // The top right corner
-
-		glTexCoord2f(1.0f, 0.0f);
-		glVertex2f(1.0f, -1.0f); // The bottom right corner
-
-		glEnd();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		/* End */
 
 	SDL_GL_SwapBuffers( );
 
@@ -1181,6 +1047,7 @@ int drawGLScene( void )
     {
 	GLint t = SDL_GetTicks();
 	if (t - T0 >= 5000) {
+
 	    GLfloat seconds = (t - T0) / 1000.0;
 	    GLfloat fps = Frames / seconds;
 	    printf("%d frames in %g seconds = %g FPS\n", Frames, seconds, fps);
@@ -1188,14 +1055,6 @@ int drawGLScene( void )
 	    col = (col+1) % 12;
 	    Frames = 0;
 	}
-	updateObsPostion((float)(t-T1)/ 1000.0);
-
-	blur_factor += change*((float)(t-T1)/ 1000.0);
-	if (blur_factor >= 2.5 || blur_factor <= 0.5){
-		change = -change;
-	}
-
-	T1 = t;
     }
 
     return( TRUE );
@@ -1209,6 +1068,7 @@ void SimTime(void){
 
 	if(dynamicsWorld)
 	dynamicsWorld->stepSimulation(dtime, 10);
+
 	drawGLScene();
 }
 
@@ -1268,14 +1128,9 @@ int main( int argc, char **argv )
     if ( videoInfo->blit_hw )
 	videoFlags |= SDL_HWACCEL;
 
+    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
 
-
-    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, 8);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-
-    surface = SDL_SetVideoMode( SCREEN_WIDTH, SCREEN_HEIGHT,32,
+    surface = SDL_SetVideoMode( SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_BPP,
 				videoFlags );
 
     if ( !surface )
@@ -1290,6 +1145,7 @@ int main( int argc, char **argv )
    		     SDL_GetError( ) );
    	    Quit( 1 );
     }
+
 
     /* initialize OpenGL */
     initGL( );
@@ -1407,7 +1263,6 @@ int main( int argc, char **argv )
 			case SDL_QUIT:
 			    done = TRUE;
 			    break;
-			case SDL_MOUSEMOTION:
 				mouseMovement((int) event.motion.x, (int) event.motion.y, (int) event.motion.state);
 				break;
 			default:

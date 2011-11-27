@@ -12,10 +12,24 @@ static btTransform trans;
 static btDiscreteDynamicsWorld *dynamicsWorld;
 static btRigidBody *box1, *box2, *box3;
 
+float BoxVel[3] = {-3.0f,0.0f,0.0f};
 
 static void draw(void)
 {
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    float xpos = box1->getCenterOfMassPosition().getX();
+    float ypos = box1->getCenterOfMassPosition().getY();
+    float zpos = box1->getCenterOfMassPosition().getZ();
+
+    printf("%f %f %f\n",xpos,ypos,zpos);
+    
+	btTransform trans = box1->getWorldTransform();
+	trans.setOrigin(btVector3(BoxVel[0], BoxVel[1], BoxVel[2]));
+	box1->setWorldTransform(trans);
+	box1->getMotionState()->getWorldTransform(trans);
+	trans.setOrigin(btVector3(BoxVel[0], BoxVel[1], BoxVel[2]));
+	box1->getMotionState()->setWorldTransform(trans);
 
 //*** draw box1 
 glColor3f(0.0, 0.0, 1.0);
@@ -48,6 +62,12 @@ glutSwapBuffers();
 }
 
 
+void updatePosition(float dtime){
+	BoxVel[0] += BoxVel[0]*dtime; 
+	BoxVel[1] += BoxVel[1]*dtime;
+	BoxVel[2] += BoxVel[2]*dtime;
+}
+
 static void tim(void)
 {
 float dtime = t;
@@ -56,6 +76,8 @@ dtime = t - dtime;
 
 if(dynamicsWorld)
 dynamicsWorld->stepSimulation(dtime, 10);
+
+updatePosition(dtime);
 
 glutPostRedisplay();
 }
@@ -118,6 +140,9 @@ motionState = new btDefaultMotionState(trans);
 btRigidBody::btRigidBodyConstructionInfo boxRigidBodyCI(btScalar(0.0), motionState, shape, btVector3(0,0,0));
 boxRigidBodyCI.m_friction = 0.4;
 box1 = new btRigidBody(boxRigidBodyCI);
+box1->setCollisionFlags( box1->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+box1->setActivationState(DISABLE_DEACTIVATION);
+
 dynamicsWorld->addRigidBody(box1);
 
 
