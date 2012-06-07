@@ -1,6 +1,10 @@
-Author : Devashish Tyagi and Keshav Chaudhary
+Author
+------
+Devashish Tyagi and Keshav Chaudhary
 Contact : cs5090240@cse.iitd.ac.in
 	  cs5090244@cse.iitd.ac.in
 
+Directory Structure
+-------------------
 /game/ : Contains the source code for the game
 /Test/ : Contains all the test codes and data that yet hasn't been integrated with the code.
