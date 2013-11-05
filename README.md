@@ -6,7 +6,7 @@ Contact : cs5090240@cse.iitd.ac.in
 
 Gameplay
 ----------
-Here is a [screenshot](http://www.flickr.com/photos/98244014@N03/10686193396/) of the game.
+Here is a [screenshot](http://www.flickr.com/photos/98244014@N03/10686193396/ "Title") of the game.
 
 Directory Structure
 -------------------
